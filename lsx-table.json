@@ -1,0 +1,21 @@
+{
+  "format": 1,
+  "source_capture": "lsx-3216-local-baseline.pcapng",
+  "title": "FIFA 15",
+  "table": {
+    "ChallengeResponse": "<ChallengeAccepted response=\"7fb049ce7f318f1cff8d03deb0a0b3c191b1160cbf3f7797db3dca01ea9a10f9954f64f2e4e86e9eee82d20216684899\"/>",
+    "GetConfig": "<GetConfigResponse><Service Name=\"EbisuSDK\" Facility=\"ACHIEVEMENT\"/><Service Name=\"EbisuSDK\" Facility=\"ACHIEVEMENT_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"CHAT_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"INVITE_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"BLOCKED_USERS\"/><Service Name=\"EbisuSDK\" Facility=\"BLOCKED_USER_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"COMMERCE\"/><Service Name=\"EbisuSDK\" Facility=\"COMMERCE_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"CONTENT\"/><Service Name=\"EbisuSDK\" Facility=\"DOWNLOAD_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"FRIENDS\"/><Service Name=\"EbisuSDK\" Facility=\"FRIENDS_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"IGO\"/><Service Name=\"EbisuSDK\" Facility=\"IGO_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"LOGIN_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"ONLINE_STATUS_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"PERMISSION\"/><Service Name=\"EbisuSDK\" Facility=\"PRESENCE\"/><Service Name=\"EbisuSDK\" Facility=\"PRESENCE_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"PROFILE_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"PROGRESSIVE_INSTALLATION\"/><Service Name=\"EbisuSDK\" Facility=\"PROGRESSIVE_INSTALLATION_EVENT\"/><Service Name=\"EbisuSDK\" Facility=\"PROFILE\"/><Service Name=\"EbisuSDK\" Facility=\"RESOURCES\"/><Service Name=\"EbisuSDK\" Facility=\"SDK\"/><Service Name=\"EbisuSDK\" Facility=\"UTILITY\"/><Service Name=\"EbisuSDK\" Facility=\"GET_USERID\"/><Service Name=\"EbisuSDK\" Facility=\"XMPP\"/></GetConfigResponse>",
+    "GetProfile": "<GetProfileResponse UserIndex=\"0\" UserId=\"1013333708008\" PersonaId=\"1006323508008\" Persona=\"398ca8qslhyu\" AvatarId=\"user:1013333708008\" Country=\"GB\" IsUnderAge=\"false\" IsSubscriber=\"false\" IsSteamSubscriber=\"false\" IsTrialSubscriber=\"false\" SubscriberLevel=\"0\" GeoCountry=\"GB\" CommerceCountry=\"GB\" CommerceCurrency=\"GBP\" PlatformUserId=\"0\" PlatformDisplayName=\"\"/>",
+    "GetSetting:SettingId=IS_IGO_ENABLED": "<GetSettingResponse Setting=\"true\"/>",
+    "SetPresence": "<ErrorSuccess Code=\"0\" Description=\"\"/>",
+    "GetGameInfo:GameInfoId=LANGUAGES": "<ErrorSuccess Code=\"-1577058296\" Description=\"Entitlement not found\"/>",
+    "IsProgressiveInstallationAvailable": "<IsProgressiveInstallationAvailableResponse ItemId=\"\" Available=\"false\"/>",
+    "GetSetting:SettingId=ENVIRONMENT": "<GetSettingResponse Setting=\"production\"/>",
+    "GetInternetConnectedState": "<InternetConnectedState connected=\"1\"/>",
+    "GetGameInfo:GameInfoId=UPTODATE": "<ErrorSuccess Code=\"-1577058296\" Description=\"Entitlement not found\"/>"
+  },
+  "events": [
+    "<PresenceVisibilityEvent Visible=\"true\"/>",
+    "<CurrentUserPresenceEvent UserId=\"1013333708008\" Presence=\"INGAME\" Title=\"UNKNOWN\" TitleId=\"\" MultiplayerId=\"1023299\" RichPresence=\"UNKNOWN\" GamePresence=\"\" SessionId=\"FIFA\" Group=\"\" GroupId=\"\"/>"
+  ]
+}
