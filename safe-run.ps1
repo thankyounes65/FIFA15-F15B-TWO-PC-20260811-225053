@@ -173,7 +173,7 @@ function Invoke-RemoteClient {
     if (-not (Test-Path -LiteralPath $RemoteClient -PathType Leaf)) {
         Stop-WithMessage "Missing launcher engine: $RemoteClient"
     }
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RemoteClient @Arguments
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RemoteClient @Arguments | Out-Host
     return [int]$LASTEXITCODE
 }
 
