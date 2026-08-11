@@ -16,4 +16,4 @@ jobs:
         shell: powershell
         run: |
           Set-StrictMode -Version Latest
-          .\safe-run.ps1 -SelfTest
+          .\diagnostic-run.ps1 -SelfTest
