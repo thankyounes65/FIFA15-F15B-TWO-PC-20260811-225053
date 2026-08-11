@@ -1,0 +1,19 @@
+name: FIFA15 remote tester self-test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  selftest:
+    runs-on: windows-latest
+    steps:
+      - name: Check out tester package
+        uses: actions/checkout@v4
+
+      - name: Run non-invasive package self-test
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          .\remote-client.ps1 -SelfTest
