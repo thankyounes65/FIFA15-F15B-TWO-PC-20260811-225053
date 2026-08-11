@@ -7,29 +7,45 @@ Windows-on-ARM / Parallels is intentionally rejected because it is not a valid r
 BEFORE THE TEST
 - Close FIFA 15 completely.
 - Make sure thankyounes has started the host-side two-PC test and left it running.
-- Extract this package to a normal local folder; do not run it from inside the ZIP.
+- Extract/clone this package to a normal local folder.
+- Do not manually edit hosts, routes, Tailscale, Origin/EA, or drive mappings.
 
 RUN
 1. Double-click RUN-FIFA15-F15B.bat and approve the Windows administrator prompt.
-2. Do not start FIFA yourself. The launcher first checks the package, Windows architecture,
-   stale FIFA processes, the FIFA executable, the bundled LSX responder, private-network
-   connectivity, host readiness, relay reachability, LSX port ownership, and hosts routing.
-3. FIFA 15 is located automatically. If your install is in an unusual folder, select fifa15.exe
-   in the file picker when asked.
-4. The launcher then starts FIFA, verifies that the known certificate patch address is inside
-   the launched FIFA image, applies the relay certificate, and reads it back for verification.
-5. Only after the launcher says FIFA 15 is ready: Ultimate Team -> Online Single Match -> Search.
+2. The safety wrapper snapshots the exact hosts-file bytes/metadata/ACL plus the relevant
+   Tailscale, EA Desktop/service, Z: drive and package-runtime pre-state before any test change.
+3. The existing tester engine validates the package, Windows architecture, FIFA executable,
+   bundled LSX responder, private-network connectivity, host readiness and relay reachability.
+4. If Tailscale is absent, the bundled MSI is installed and JOIN.key is used automatically.
+   If Tailscale already exists, the tester only borrows an already-connected installation;
+   it refuses to reconfigure a disconnected pre-existing installation because that cannot be
+   restored exactly enough for this preservation test.
+5. FIFA is launched automatically. The relay certificate is patched in FIFA memory and read
+   back for verification.
+6. Only after the launcher says FIFA 15 is ready: Ultimate Team -> Online Single Match -> Search.
    Do not cancel once searching.
-6. Close FIFA after the test. Cleanup runs automatically.
-7. Send the FIFA15-F15B-EVIDENCE-*.zip from your Desktop to thankyounes.
+7. Close FIFA after the test. Cleanup runs automatically.
+8. Send the FIFA15-F15B-EVIDENCE-*.zip from your Desktop to thankyounes.
+
+RESTORATION GUARANTEE
+- The Windows hosts file is restored from its recorded pre-test bytes, not reconstructed or cleared.
+- Any package-created Z: mapping and package-local runtime files are removed.
+- If the package installed Tailscale, it logs out/uninstalls it; a pre-existing connected Tailscale
+  installation is not reconfigured or logged out.
+- EA Desktop running/stopped state and the relevant EA service states are restored to the recorded
+  pre-test state.
+- Emergency cleanup uses the same persistent snapshot: CLEANUP-FIFA15-F15B.bat.
+- If restoration cannot be verified, the snapshot is deliberately retained and the window reports
+  RESTORATION INCOMPLETE instead of pretending cleanup succeeded.
+
+Two intentional artifacts are not restored: JOIN.key is deleted after a successful join for security,
+and the evidence ZIP is left on the Desktop for the test report. Windows itself may also retain normal
+OS audit/event/MSI history; this package does not erase forensic logs. Configuration touched by the
+appliance is restored to its recorded pre-test values.
 
 IF IT STOPS
-Do not improvise or manually edit your PC. Send thankyounes the exact STOP message shown by the launcher.
+Do not improvise or manually edit the PC. Send thankyounes the exact STOP/RESTORATION message.
 Emergency cleanup: CLEANUP-FIFA15-F15B.bat
 
-IMPORTANT PRIVATE-NETWORK NOTE
-This package needs either an already-connected Tailscale installation or a valid JOIN.key supplied
-for this test. A join key that has expired or been revoked will be rejected with a clear STOP message.
-
 Test ID: 20260811-225053
-Package revision: hardening-v2
+Package revision: restore-v3

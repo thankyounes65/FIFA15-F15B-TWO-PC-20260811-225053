@@ -1,7 +1,7 @@
 {
   "format": 2,
-  "package_revision": "hardening-v2",
-  "note": "The launcher verifies required text/config files structurally at runtime. Exact SHA-256 checks are reserved for binary payloads whose bytes must not change across checkout/extraction.",
+  "package_revision": "restore-v3",
+  "note": "The launcher verifies required text/config files structurally at runtime. Exact SHA-256 checks are reserved for binary payloads whose bytes must not change across checkout/extraction. safe-run.ps1 wraps the tested remote-client.ps1 and restores recorded machine configuration after the run.",
   "binary_files": [
     {
       "name": "ca_modulus_1024.bin",
