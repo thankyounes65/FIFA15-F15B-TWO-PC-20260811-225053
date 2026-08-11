@@ -1,57 +1,17 @@
-﻿[
+{
+  "format": 2,
+  "package_revision": "hardening-v2",
+  "note": "The launcher verifies required text/config files structurally at runtime. Exact SHA-256 checks are reserved for binary payloads whose bytes must not change across checkout/extraction.",
+  "binary_files": [
     {
-        "name":  "APPLIANCE-CONFIG.json",
-        "bytes":  235,
-        "sha256":  "9AE3F0C13425A20F45BAFCFA08B6459CB390FE41EF93018B6E124944F8B07266"
+      "name": "ca_modulus_1024.bin",
+      "bytes": 128,
+      "sha256": "5A6C7E9A1DAF98099BBE5C97C4ABD5FE6315FDDA4439F77A18635EE56C146A3A"
     },
     {
-        "name":  "ca_modulus_1024.bin",
-        "bytes":  128,
-        "sha256":  "5A6C7E9A1DAF98099BBE5C97C4ABD5FE6315FDDA4439F77A18635EE56C146A3A"
-    },
-    {
-        "name":  "CLEANUP-FIFA15-F15B.bat",
-        "bytes":  178,
-        "sha256":  "DDCE9AB4B8636905C8128EB7058ADD97B00EC57C1FFDE71CD080256F523FC045"
-    },
-    {
-        "name":  "fifa15-managed-hostnames.ps1",
-        "bytes":  1711,
-        "sha256":  "B5665C2343A8DCAE255F0F1FF30EEAE14AE3358359B33F50515B8B801BB8BDC4"
-    },
-    {
-        "name":  "JOIN.key",
-        "bytes":  64,
-        "sha256":  "566CCA7234666CD24CA547719B9BA8A21904FCBAA1FD3D9BB13D82659F784410"
-    },
-    {
-        "name":  "lsx-table.json",
-        "bytes":  3235,
-        "sha256":  "57A6FBA8C6E01AA9EF3EC2C0996A149EE74395D8B2208A5D056C5C42F167E483"
-    },
-    {
-        "name":  "portable-lsx-responder.ps1",
-        "bytes":  8176,
-        "sha256":  "7036E0FD29E71E231FE81A54FCAEABE70737AB4BF09378B22E79C439EF922114"
-    },
-    {
-        "name":  "README-FIRST.txt",
-        "bytes":  755,
-        "sha256":  "26E2DAF35FF6DF871467202BA90A9D1392D916933B4637B32F782C78589E99D5"
-    },
-    {
-        "name":  "remote-client.ps1",
-        "bytes":  19057,
-        "sha256":  "61E39749BBDBECB9B9798925C28C077EF2031192F3D223607B4F747FE7BFD083"
-    },
-    {
-        "name":  "RUN-FIFA15-F15B.bat",
-        "bytes":  371,
-        "sha256":  "1FA31860A871932010B1D5BACCDC2967CD9BD54AB28794A1717A2F4EB1925EF0"
-    },
-    {
-        "name":  "tailscale-amd64.msi",
-        "bytes":  38354432,
-        "sha256":  "D2EB69E103B08A5B77DE9D7CB8555541AA99F7DFC6048850B2286A1048C885F9"
+      "name": "tailscale-amd64.msi",
+      "bytes": 38354432,
+      "sha256": "D2EB69E103B08A5B77DE9D7CB8555541AA99F7DFC6048850B2286A1048C885F9"
     }
-]
+  ]
+}
