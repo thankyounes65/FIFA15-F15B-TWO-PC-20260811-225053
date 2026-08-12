@@ -16,7 +16,12 @@ jobs:
         shell: powershell
         run: |
           Set-StrictMode -Version Latest
+          if (Test-Path -LiteralPath '.\JOIN.key') { throw 'Public tester HEAD must not contain JOIN.key' }
+          $bat = Get-Content -LiteralPath '.\RUN-FIFA15-F15B.bat' -Raw
+          if ($bat -notmatch 'diagnostic-run\.ps1') { throw 'RUN BAT must enter through diagnostic-run.ps1' }
           .\tailscale-preflight.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\diagnostic-run.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\launch-safe.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
