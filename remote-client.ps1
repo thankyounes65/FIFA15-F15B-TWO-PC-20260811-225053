@@ -14,7 +14,7 @@ $HostsPath = Join-Path $env:WINDIR 'System32\drivers\etc\hosts'
 $StartMarker = '# BEGIN FIFA15-TWO-PC-APPLIANCE'
 $EndMarker = '# END FIFA15-TWO-PC-APPLIANCE'
 $ReadyPort = 48215
-$PackageRevision = 'hardening-v5'
+$PackageRevision = 'hardening-v6'
 $RelayHostnames = @()
 $PatchPreimageSha256 = $null
 
@@ -224,11 +224,11 @@ function Invoke-PackageSelfTest {
 
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
     if ($source -notmatch 'Wait-FifaProcessWithModule') { Fail 'FIFA process/module readiness helper is missing.' }
-    if ($source -notmatch 'Read-FifaPatchPreimage') { Fail 'Certificate-page readiness helper is missing.' }
-    if ($source -notmatch 'VirtualQueryEx') { Fail 'Certificate-page memory diagnostics are missing.' }
     if ($source -match '\$[A-Za-z_][A-Za-z0-9_]*\.ProcessName\.Equals\(') { Fail 'Unsafe instance process-name equality call is still present.' }
     if ($source -notmatch 'FIFA_MODULE_NOT_READY') { Fail 'Named FIFA module-readiness failure is missing.' }
-    if ($source -notmatch 'CERTIFICATE_PREIMAGE_READ_FAILED') { Fail 'Named certificate preimage-read failure is missing.' }
+    if ($source -notmatch 'Matching proven host CA timing: waiting 500 ms before direct write') { Fail 'Proven direct-write CA timing marker is missing.' }
+    if ($source -notmatch 'CERTIFICATE_WRITE_FAILED') { Fail 'Named certificate write failure is missing.' }
+    if ($source -notmatch 'Report-CrackCompanions') { Fail 'Crack companion evidence helper is missing.' }
 
     $lsxScript = Join-Path $Root 'portable-lsx-responder.ps1'
     $table = Join-Path $Root 'lsx-table.json'
@@ -236,7 +236,7 @@ function Invoke-PackageSelfTest {
     if ($LASTEXITCODE -ne 0) {
         Fail "Bundled LSX responder self-test failed: $($selfTestOutput -join ' ')"
     }
-    Info 'PASS: package files, JSON, launch null-safety guards, certificate-page readiness diagnostics, binary assets, and LSX responder self-test.'
+    Info 'PASS: package files, JSON, launch null-safety guards, proven direct-write CA timing, crack companion evidence, binary assets, and LSX responder self-test.'
 }
 
 function Test-TcpPort([string]$HostIp, [int]$Port, [int]$TimeoutMs = 2500) {
@@ -409,6 +409,24 @@ function Assert-FifaExecutable([string]$Path) {
     $hash = (Get-FileHash $Path -Algorithm SHA256).Hash
     Info "PASS: FIFA executable is x64; SHA-256 $hash"
     return $hash
+}
+
+function Report-CrackCompanions([string]$Exe) {
+    $gameDir = Split-Path -Parent $Exe
+    foreach ($name in @('ItsAMe_Origin.dll','sysdllzf.dll')) {
+        $path = Join-Path $gameDir $name
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            Info "Crack companion: $name is not present next to fifa15.exe."
+            continue
+        }
+        try {
+            $item = Get-Item -LiteralPath $path
+            $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+            Info "Crack companion: $name bytes=$($item.Length) SHA-256=$hash"
+        } catch {
+            Info "Crack companion: $name exists but could not be hashed: $($_.Exception.Message)"
+        }
+    }
 }
 
 function Stop-BundledLsx {
@@ -706,6 +724,18 @@ function Launch-AndPatchFifa([string]$Exe) {
         Fail-Code 'CERTIFICATE_LAYOUT_DIFFERENT' ("This FIFA build/runtime does not map the known certificate patch location safely (base=0x{0:X}, imageEnd=0x{1:X}). No memory was modified." -f $baseValue,$endValue)
     }
 
+    Info 'Matching proven host CA timing: waiting 500 ms before direct write.'
+    Start-Sleep -Milliseconds 500
+    $live = Get-Process -Id $process.Id -ErrorAction SilentlyContinue
+    if (-not $live) {
+        $exitDetail = ''
+        try {
+            $launch.Refresh()
+            if ($launch.HasExited) { $exitDetail = " exit_code=$($launch.ExitCode)" }
+        } catch {}
+        Fail-Code 'FIFA_EXITED_BEFORE_CERTIFICATE_PATCH' "fifa15 PID $($process.Id) exited during the proven 500 ms CA-patch delay.$exitDetail"
+    }
+
     Ensure-PatchType
     $handle = [Fifa15Native]::OpenProcess(0x1438, $false, [uint32]$process.Id)
     if ($handle -eq [IntPtr]::Zero) {
@@ -715,43 +745,38 @@ function Launch-AndPatchFifa([string]$Exe) {
     }
 
     $address = New-Object IntPtr $addressValue
-    $preimage = Read-FifaPatchPreimage -Handle $handle -Address $address -ProcessId $process.Id
-    if (-not $preimage.Success) {
-        [Fifa15Native]::CloseHandle($handle) | Out-Null
-        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-        Fail-Code ([string]$preimage.Code) ([string]$preimage.Detail)
-    }
-
-    $before = [byte[]]$preimage.Bytes
-    $script:PatchPreimageSha256 = Get-BytesSha256 $before
-    Info "Certificate patch site verified readable; preimage SHA-256 $script:PatchPreimageSha256"
-
+    $failureCode = $null
+    $failureText = $null
     try {
-        if ([Convert]::ToBase64String($before) -ne [Convert]::ToBase64String($bytes)) {
-            $written = [IntPtr]::Zero
-            $writeOk = [Fifa15Native]::WriteProcessMemory($handle, $address, $bytes, $bytes.Length, [ref]$written)
-            if (-not $writeOk -or $written.ToInt64() -ne 128) {
-                $writeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-                throw "WriteProcessMemory failed (win32_error=$writeError bytes_written=$($written.ToInt64()))"
-            }
+        $written = [IntPtr]::Zero
+        $writeOk = [Fifa15Native]::WriteProcessMemory($handle, $address, $bytes, $bytes.Length, [ref]$written)
+        if (-not $writeOk -or $written.ToInt64() -ne 128) {
+            $writeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+            $failureCode = 'CERTIFICATE_WRITE_FAILED'
+            $failureText = "Direct CA WriteProcessMemory failed (win32_error=$writeError bytes_written=$($written.ToInt64()))."
         } else {
-            Info 'Relay certificate was already present at the verified patch site; write skipped.'
+            Info 'OTG3 modulus direct write completed; verifying the 128-byte readback.'
+            $check = New-Object byte[] 128
+            $read = [IntPtr]::Zero
+            $readOk = [Fifa15Native]::ReadProcessMemory($handle, $address, $check, 128, [ref]$read)
+            if (-not $readOk -or $read.ToInt64() -ne 128) {
+                $readError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                $failureCode = 'CERTIFICATE_READBACK_FAILED'
+                $failureText = "Post-write ReadProcessMemory failed (win32_error=$readError bytes_read=$($read.ToInt64()))."
+            } elseif ([Convert]::ToBase64String($check) -ne [Convert]::ToBase64String($bytes)) {
+                $failureCode = 'CERTIFICATE_READBACK_FAILED'
+                $failureText = 'Certificate readback mismatch after the direct write.'
+            }
         }
-
-        $check = New-Object byte[] 128
-        $read = [IntPtr]::Zero
-        $readOk = [Fifa15Native]::ReadProcessMemory($handle, $address, $check, 128, [ref]$read)
-        if (-not $readOk -or $read.ToInt64() -ne 128) {
-            $readError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-            throw "post-patch ReadProcessMemory failed (win32_error=$readError bytes_read=$($read.ToInt64()))"
-        }
-        if ([Convert]::ToBase64String($check) -ne [Convert]::ToBase64String($bytes)) { throw 'certificate readback mismatch' }
-    } catch {
-        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-        Fail "Certificate patch failed: $_"
     } finally {
         [Fifa15Native]::CloseHandle($handle) | Out-Null
     }
+
+    if ($failureCode) {
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        Fail-Code $failureCode $failureText
+    }
+
     Info "FIFA 15 ready (PID $($process.Id)); relay certificate verified."
     return $process
 }
@@ -811,6 +836,7 @@ if (-not $fifa) {
 if (-not $fifa) { Fail 'FIFA 15 could not be found or selected. Nothing has been changed yet.' }
 $fifaHash = Assert-FifaExecutable $fifa
 Info "Found FIFA 15: $fifa"
+Report-CrackCompanions $fifa
 
 $installedHere = $false
 $joinedHere = $false
