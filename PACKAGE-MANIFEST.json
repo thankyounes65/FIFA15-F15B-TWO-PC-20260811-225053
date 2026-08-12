@@ -1,7 +1,7 @@
 {
   "format": 2,
-  "package_revision": "restore-v3",
-  "note": "The launcher verifies required text/config files structurally at runtime. Exact SHA-256 checks are reserved for binary payloads whose bytes must not change across checkout/extraction. safe-run.ps1 wraps the tested remote-client.ps1 and restores recorded machine configuration after the run.",
+  "package_revision": "shared-host-v4",
+  "note": "The supported public-tester network path is the tester's own connected Tailscale account plus a machine-share for the host. RUN-FIFA15-F15B.bat writes a durable Desktop diagnostic on every run. safe-run.ps1 wraps remote-client.ps1 and restores recorded machine configuration after the run. Exact SHA-256 checks are reserved for binary payloads.",
   "binary_files": [
     {
       "name": "ca_modulus_1024.bin",
