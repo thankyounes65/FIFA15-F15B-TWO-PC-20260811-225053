@@ -20,8 +20,14 @@ function Ensure-Elevated {
     }
 }
 
+function Test-HostsWriteLock([string]$Text) {
+    if (-not $Text) { return $false }
+    return ($Text -match 'drivers\\etc\\hosts.*being used by another process|GetContentWriterIOError.*hosts|Set-Content.*hosts.*IOException')
+}
+
 function Get-Diagnosis([string]$Text, [int]$ExitCode) {
     if ($Text -match 'FIFA 15 ready \(PID .*relay certificate verified') { return 'RUNTIME_LAUNCH_VERIFIED' }
+    if ($Text -match 'STOP \[HOSTS_WRITE_LOCKED\]') { return 'HOSTS_WRITE_LOCKED' }
     if ($Text -match 'TAILSCALE_HOST_NOT_SHARED') { return 'TAILSCALE_HOST_NOT_SHARED' }
     if ($Text -match 'TAILSCALE_NOT_CONNECTED') { return 'TAILSCALE_NOT_CONNECTED' }
     if ($Text -match 'TAILSCALE_NOT_INSTALLED') { return 'TAILSCALE_NOT_INSTALLED' }
@@ -67,8 +73,10 @@ function Invoke-SelfTest {
     }
     if ((Get-Diagnosis 'STOP [TAILSCALE_HOST_NOT_SHARED]: nope' 1) -ne 'TAILSCALE_HOST_NOT_SHARED') { throw 'Tailscale classifier failed' }
     if ((Get-Diagnosis 'Certificate patch failed: pre-patch ReadProcessMemory failed' 1) -ne 'CERTIFICATE_PREIMAGE_READ_FAILED') { throw 'certificate classifier failed' }
+    if ((Get-Diagnosis 'STOP [HOSTS_WRITE_LOCKED]: retry exhausted' 1) -ne 'HOSTS_WRITE_LOCKED') { throw 'hosts-lock classifier failed' }
+    if (-not (Test-HostsWriteLock "Set-Content : The process cannot access the file 'C:\WINDOWS\System32\drivers\etc\hosts' because it is being used by another process.")) { throw 'hosts-lock detector failed' }
     if ((Get-Diagnosis 'FIFA 15 ready (PID 123); relay certificate verified.' 0) -ne 'RUNTIME_LAUNCH_VERIFIED') { throw 'success classifier failed' }
-    Write-Host 'PASS: durable diagnostic wrapper parses and classifies known boundaries without changing the machine.' -ForegroundColor Green
+    Write-Host 'PASS: durable diagnostic wrapper parses, classifies known boundaries, and recognizes transient hosts locks without changing the machine.' -ForegroundColor Green
 }
 
 if ($SelfTest) {
@@ -95,6 +103,28 @@ Write-Host "Diagnostic log: $diagPath" -ForegroundColor Cyan
 $rc = Invoke-LoggedScript -Path $Preflight -DiagPath $diagPath
 if ($rc -eq 0) {
     $rc = Invoke-LoggedScript -Path $Launcher -DiagPath $diagPath
+
+    if ($rc -ne 0) {
+        $firstAttemptText = [string](Get-Content -LiteralPath $diagPath -Raw -ErrorAction SilentlyContinue)
+        if (Test-HostsWriteLock $firstAttemptText) {
+            $retryNote = 'AUTO-RETRY: Windows temporarily locked the hosts file. The first attempt restored cleanly; waiting two seconds and retrying the complete guest launch once.'
+            Write-Host $retryNote -ForegroundColor Yellow
+            Add-Content -LiteralPath $diagPath -Value @('', $retryNote, '') -Encoding UTF8
+            Start-Sleep -Seconds 2
+
+            $beforeRetry = [string](Get-Content -LiteralPath $diagPath -Raw -ErrorAction SilentlyContinue)
+            $retryStart = $beforeRetry.Length
+            $rc = Invoke-LoggedScript -Path $Launcher -DiagPath $diagPath
+            $afterRetry = [string](Get-Content -LiteralPath $diagPath -Raw -ErrorAction SilentlyContinue)
+            $retryText = if ($afterRetry.Length -gt $retryStart) { $afterRetry.Substring($retryStart) } else { '' }
+
+            if ($rc -ne 0 -and (Test-HostsWriteLock $retryText)) {
+                $lockLine = 'STOP [HOSTS_WRITE_LOCKED]: Windows kept the hosts file locked across one clean automatic retry. No matchmaking conclusion can be drawn.'
+                Write-Host $lockLine -ForegroundColor Red
+                Add-Content -LiteralPath $diagPath -Value $lockLine -Encoding UTF8
+            }
+        }
+    }
 }
 
 $text = Get-Content -LiteralPath $diagPath -Raw -ErrorAction SilentlyContinue
