@@ -35,7 +35,7 @@ jobs:
           if ($forwardPorts.Count -ne 2 -or 17502 -notin $forwardPorts -or 17503 -notin $forwardPorts) { throw 'Known-good contract must pin only the two proven guest loopback forward ports' }
 
           $readme = Get-Content -LiteralPath '.\README-FIRST.txt' -Raw
-          foreach ($marker in @('PLAYER-B-BOOT-AND-CONNECT.md','VERIFY-PLAYER-B-GAME-FILES.bat','F15B_LOOPBACK_FORWARDER_READY','EA readiness stable for 10 seconds')) {
+          foreach ($marker in @('PLAYER-B-BOOT-AND-CONNECT.md','VERIFY-PLAYER-B-GAME-FILES.bat','F15B_LOOPBACK_FORWARDER_READY','hold that state stable for 10 seconds')) {
             if (-not $readme.Contains($marker)) { throw "README missing working-state marker: $marker" }
           }
 
