@@ -1,7 +1,26 @@
 {
-  "format": 2,
-  "package_revision": "shared-host-v4",
-  "note": "The supported public-tester network path is the tester's own connected Tailscale account plus a machine-share for the host. RUN-FIFA15-F15B.bat writes a durable Desktop diagnostic on every run. safe-run.ps1 wraps remote-client.ps1 and restores recorded machine configuration after the run. Exact SHA-256 checks are reserved for binary payloads.",
+  "format": 3,
+  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503",
+  "role": "f15b",
+  "note": "Proven physical Player B package: tester-owned Tailscale account + shared host; exact-state restoration; package LSX on 127.0.0.1:3216; full EA App readiness gate stable for 10 seconds; 500 ms direct CA write/readback; transparent loopback forwarding of only QoS 17502 and FUT REST 17503. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records their observed hashes/provenance.",
+  "documentation_files": [
+    "README-FIRST.txt",
+    "PLAYER-B-BOOT-AND-CONNECT.md",
+    "PLAYER-B-KNOWN-GOOD.json"
+  ],
+  "verification_files": [
+    "VERIFY-PLAYER-B-GAME-FILES.bat",
+    "VERIFY-PLAYER-B-GAME-FILES.ps1"
+  ],
+  "runtime_features": {
+    "exact_restore": "restore-v3",
+    "ea_readiness_gate": true,
+    "ea_readiness_stability_seconds": 10,
+    "lsx_local_port": 3216,
+    "loopback_forward_ports": [17502, 17503],
+    "host_ready_port": 48215,
+    "host_preflight_port": 42127
+  },
   "binary_files": [
     {
       "name": "ca_modulus_1024.bin",
