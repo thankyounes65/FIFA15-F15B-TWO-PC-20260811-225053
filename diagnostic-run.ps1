@@ -63,6 +63,35 @@ function Invoke-LoggedScript([string]$Path, [string]$DiagPath) {
     return [int]$LASTEXITCODE
 }
 
+function Invoke-LauncherWithHostsRetry([string]$DiagPath) {
+    $maxAttempts = 4
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        $before = [string](Get-Content -LiteralPath $DiagPath -Raw -ErrorAction SilentlyContinue)
+        $start = $before.Length
+        $rc = Invoke-LoggedScript -Path $Launcher -DiagPath $DiagPath
+        if ($rc -eq 0) { return 0 }
+
+        $after = [string](Get-Content -LiteralPath $DiagPath -Raw -ErrorAction SilentlyContinue)
+        $attemptText = if ($after.Length -gt $start) { $after.Substring($start) } else { '' }
+        if (-not (Test-HostsWriteLock $attemptText)) { return $rc }
+
+        if ($attempt -lt $maxAttempts) {
+            $delay = [int][Math]::Pow(2, $attempt - 1)
+            $retryNote = "AUTO-RETRY: Windows temporarily locked the hosts file. Attempt $attempt restored cleanly; waiting $delay second(s) before retrying the complete guest launch."
+            Write-Host $retryNote -ForegroundColor Yellow
+            Add-Content -LiteralPath $DiagPath -Value @('', $retryNote, '') -Encoding UTF8
+            Start-Sleep -Seconds $delay
+            continue
+        }
+
+        $lockLine = "STOP [HOSTS_WRITE_LOCKED]: Windows kept the hosts file locked across $maxAttempts clean launch attempts. No matchmaking conclusion can be drawn."
+        Write-Host $lockLine -ForegroundColor Red
+        Add-Content -LiteralPath $DiagPath -Value $lockLine -Encoding UTF8
+        return $rc
+    }
+    return 1
+}
+
 function Invoke-SelfTest {
     foreach ($path in @($PSCommandPath,$Preflight,$Launcher)) {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "missing $path" }
@@ -76,7 +105,7 @@ function Invoke-SelfTest {
     if ((Get-Diagnosis 'STOP [HOSTS_WRITE_LOCKED]: retry exhausted' 1) -ne 'HOSTS_WRITE_LOCKED') { throw 'hosts-lock classifier failed' }
     if (-not (Test-HostsWriteLock "Set-Content : The process cannot access the file 'C:\WINDOWS\System32\drivers\etc\hosts' because it is being used by another process.")) { throw 'hosts-lock detector failed' }
     if ((Get-Diagnosis 'FIFA 15 ready (PID 123); relay certificate verified.' 0) -ne 'RUNTIME_LAUNCH_VERIFIED') { throw 'success classifier failed' }
-    Write-Host 'PASS: durable diagnostic wrapper parses, classifies known boundaries, and recognizes transient hosts locks without changing the machine.' -ForegroundColor Green
+    Write-Host 'PASS: durable diagnostic wrapper parses, classifies known boundaries, and tolerates transient hosts locks with bounded clean retries.' -ForegroundColor Green
 }
 
 if ($SelfTest) {
@@ -102,29 +131,7 @@ $diagPath = Join-Path $desktop "FIFA15-F15B-DIAG-$stamp.txt"
 Write-Host "Diagnostic log: $diagPath" -ForegroundColor Cyan
 $rc = Invoke-LoggedScript -Path $Preflight -DiagPath $diagPath
 if ($rc -eq 0) {
-    $rc = Invoke-LoggedScript -Path $Launcher -DiagPath $diagPath
-
-    if ($rc -ne 0) {
-        $firstAttemptText = [string](Get-Content -LiteralPath $diagPath -Raw -ErrorAction SilentlyContinue)
-        if (Test-HostsWriteLock $firstAttemptText) {
-            $retryNote = 'AUTO-RETRY: Windows temporarily locked the hosts file. The first attempt restored cleanly; waiting two seconds and retrying the complete guest launch once.'
-            Write-Host $retryNote -ForegroundColor Yellow
-            Add-Content -LiteralPath $diagPath -Value @('', $retryNote, '') -Encoding UTF8
-            Start-Sleep -Seconds 2
-
-            $beforeRetry = [string](Get-Content -LiteralPath $diagPath -Raw -ErrorAction SilentlyContinue)
-            $retryStart = $beforeRetry.Length
-            $rc = Invoke-LoggedScript -Path $Launcher -DiagPath $diagPath
-            $afterRetry = [string](Get-Content -LiteralPath $diagPath -Raw -ErrorAction SilentlyContinue)
-            $retryText = if ($afterRetry.Length -gt $retryStart) { $afterRetry.Substring($retryStart) } else { '' }
-
-            if ($rc -ne 0 -and (Test-HostsWriteLock $retryText)) {
-                $lockLine = 'STOP [HOSTS_WRITE_LOCKED]: Windows kept the hosts file locked across one clean automatic retry. No matchmaking conclusion can be drawn.'
-                Write-Host $lockLine -ForegroundColor Red
-                Add-Content -LiteralPath $diagPath -Value $lockLine -Encoding UTF8
-            }
-        }
-    }
+    $rc = Invoke-LauncherWithHostsRetry -DiagPath $diagPath
 }
 
 $text = Get-Content -LiteralPath $diagPath -Raw -ErrorAction SilentlyContinue
