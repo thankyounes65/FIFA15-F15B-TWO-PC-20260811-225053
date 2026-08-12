@@ -9,6 +9,7 @@ $Root = Split-Path -Parent $PSCommandPath
 $SafeRun = Join-Path $Root 'safe-run.ps1'
 $JoinKey = Join-Path $Root 'JOIN.key'
 $HeldKey = Join-Path $Root 'JOIN.key.not-used-with-existing-tailscale'
+$EaGuardRevision = 'ea-state-v1'
 
 function Find-Tailscale {
     foreach ($path in @("$env:ProgramFiles\Tailscale\tailscale.exe", "$env:ProgramFiles(x86)\Tailscale\tailscale.exe")) {
@@ -35,6 +36,103 @@ function Restore-HeldKey {
     }
 }
 
+function Start-KnownGoodEaCompatibilityGuard {
+    $job = Start-Job -ArgumentList $Root,$EaGuardRevision -ScriptBlock {
+        param([string]$PackageRoot,[string]$Revision)
+        $ErrorActionPreference = 'Continue'
+        Write-Output "EA_COMPAT_GUARD: revision=$Revision waiting for package LSX ownership of 127.0.0.1:3216."
+
+        $lsxOwner = $null
+        $deadline = (Get-Date).AddSeconds(45)
+        while ((Get-Date) -lt $deadline -and -not $lsxOwner) {
+            $listener = Get-NetTCPConnection -LocalAddress '127.0.0.1' -LocalPort 3216 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($listener) {
+                $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
+                if ($proc -and $proc.CommandLine -and $proc.CommandLine -match 'portable-lsx-responder\.ps1' -and $proc.CommandLine -like "*$PackageRoot*") {
+                    $lsxOwner = [int]$listener.OwningProcess
+                    break
+                }
+            }
+            Start-Sleep -Milliseconds 50
+        }
+
+        if (-not $lsxOwner) {
+            Write-Output 'EA_COMPAT_GUARD: package LSX ownership was not observed before timeout; service state was not changed.'
+            return
+        }
+        Write-Output "EA_COMPAT_GUARD: package LSX confirmed on 3216 pid=$lsxOwner."
+
+        $svc = Get-Service -Name EABackgroundService -ErrorAction SilentlyContinue
+        if (-not $svc) {
+            Write-Output 'EA_COMPAT_GUARD: EABackgroundService is not installed; cannot reproduce the known-good EA state.'
+            return
+        }
+        try {
+            if ($svc.Status -ne 'Running') {
+                Start-Service -Name EABackgroundService -ErrorAction Stop
+                $svc.WaitForStatus('Running',[TimeSpan]::FromSeconds(15))
+                $svc.Refresh()
+            }
+        } catch {
+            Write-Output "EA_COMPAT_GUARD: failed to start EABackgroundService: $($_.Exception.Message)"
+            return
+        }
+        Write-Output "EA_COMPAT_GUARD: EABackgroundService status=$($svc.Status) before FIFA launch."
+
+        Start-Sleep -Milliseconds 100
+        $listener = Get-NetTCPConnection -LocalAddress '127.0.0.1' -LocalPort 3216 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $listener -or [int]$listener.OwningProcess -ne $lsxOwner) {
+            $newOwner = if ($listener) { [int]$listener.OwningProcess } else { 0 }
+            Write-Output "EA_COMPAT_GUARD: ERROR LSX lost 3216 after starting EABackgroundService; expected=$lsxOwner actual=$newOwner."
+            return
+        }
+        Write-Output "EA_COMPAT_GUARD: PASS EABackgroundService running while package LSX still owns 3216 pid=$lsxOwner."
+
+        $fifa = $null
+        $fifaDeadline = (Get-Date).AddSeconds(45)
+        while ((Get-Date) -lt $fifaDeadline -and -not $fifa) {
+            $fifa = Get-Process -Name fifa15 -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $fifa) { Start-Sleep -Milliseconds 25 }
+        }
+        if (-not $fifa) {
+            Write-Output 'EA_COMPAT_GUARD: fifa15.exe was not observed after the known-good EA state was established.'
+            return
+        }
+
+        $pidValue = [int]$fifa.Id
+        Write-Output "EA_COMPAT_GUARD: observed fifa15 pid=$pidValue; sampling early companion-module state."
+        $lastMs = 0
+        foreach ($sampleMs in @(0,100,250,500,1000)) {
+            if ($sampleMs -gt $lastMs) { Start-Sleep -Milliseconds ($sampleMs - $lastMs) }
+            $lastMs = $sampleMs
+            $procNow = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
+            $alive = [bool]$procNow
+            $modules = @()
+            if ($procNow) {
+                try {
+                    $modules = @($procNow.Modules | Where-Object { $_.ModuleName -in @('ItsAMe_Origin.dll','sysdllzf.dll') } | ForEach-Object { $_.ModuleName })
+                } catch {}
+            }
+            $serviceNow = Get-Service -Name EABackgroundService -ErrorAction SilentlyContinue
+            $serviceStatus = if ($serviceNow) { [string]$serviceNow.Status } else { '<missing>' }
+            Write-Output "EA_COMPAT sample t=${sampleMs}ms alive=$alive service=$serviceStatus modules=$($modules -join ',')"
+            if (-not $alive) { break }
+        }
+    }
+    return $job
+}
+
+function Stop-AndReportEaCompatibilityGuard($Job) {
+    if (-not $Job) { return }
+    try {
+        Wait-Job -Job $Job -Timeout 2 | Out-Null
+        Receive-Job -Job $Job -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+    } finally {
+        Stop-Job -Job $Job -ErrorAction SilentlyContinue | Out-Null
+        Remove-Job -Job $Job -Force -ErrorAction SilentlyContinue
+    }
+}
+
 if ($SelfTest) {
     $tokens = $null
     $errors = $null
@@ -47,7 +145,14 @@ if ($SelfTest) {
         Write-Host 'SELF-TEST FAILED: missing safe-run.ps1' -ForegroundColor Red
         exit 1
     }
-    Write-Host 'PASS: launch guard parses; existing Tailscale cannot consume JOIN.key; emergency cleanup always reaches the machine restore.' -ForegroundColor Green
+    $source = Get-Content -LiteralPath $PSCommandPath -Raw
+    foreach ($marker in @('Start-KnownGoodEaCompatibilityGuard','EABackgroundService','portable-lsx-responder\.ps1','EA_COMPAT sample t=')) {
+        if ($source -notmatch $marker) {
+            Write-Host "SELF-TEST FAILED: missing EA compatibility guard marker: $marker" -ForegroundColor Red
+            exit 1
+        }
+    }
+    Write-Host 'PASS: launch guard parses; existing Tailscale cannot consume JOIN.key; known-good EA background-service guard is armed before the safe runner; emergency cleanup always reaches the machine restore.' -ForegroundColor Green
     exit 0
 }
 
@@ -72,6 +177,7 @@ if ($Cleanup) {
 
 Restore-HeldKey
 $held = $false
+$eaGuard = $null
 try {
     if ((Has-ExistingTailscaleConnection) -and (Test-Path -LiteralPath $JoinKey)) {
         if (Test-Path -LiteralPath $HeldKey) {
@@ -83,9 +189,12 @@ try {
         Write-Host '  Existing Tailscale connection detected; JOIN.key is quarantined for this run and cannot switch accounts/tailnets.' -ForegroundColor Gray
     }
 
+    Write-Host "  EA compatibility guard armed ($EaGuardRevision): it will start EABackgroundService only after package LSX owns 3216." -ForegroundColor Gray
+    $eaGuard = Start-KnownGoodEaCompatibilityGuard
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $SafeRun | Out-Host
     $rc = [int]$LASTEXITCODE
 } finally {
+    Stop-AndReportEaCompatibilityGuard $eaGuard
     if ($held) { Restore-HeldKey }
 }
 exit $rc
