@@ -14,7 +14,7 @@ $HostsPath = Join-Path $env:WINDIR 'System32\drivers\etc\hosts'
 $StartMarker = '# BEGIN FIFA15-TWO-PC-APPLIANCE'
 $EndMarker = '# END FIFA15-TWO-PC-APPLIANCE'
 $ReadyPort = 48215
-$PackageRevision = 'hardening-v4'
+$PackageRevision = 'hardening-v5'
 $RelayHostnames = @()
 $PatchPreimageSha256 = $null
 
@@ -224,8 +224,11 @@ function Invoke-PackageSelfTest {
 
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
     if ($source -notmatch 'Wait-FifaProcessWithModule') { Fail 'FIFA process/module readiness helper is missing.' }
+    if ($source -notmatch 'Read-FifaPatchPreimage') { Fail 'Certificate-page readiness helper is missing.' }
+    if ($source -notmatch 'VirtualQueryEx') { Fail 'Certificate-page memory diagnostics are missing.' }
     if ($source -match '\$[A-Za-z_][A-Za-z0-9_]*\.ProcessName\.Equals\(') { Fail 'Unsafe instance process-name equality call is still present.' }
     if ($source -notmatch 'FIFA_MODULE_NOT_READY') { Fail 'Named FIFA module-readiness failure is missing.' }
+    if ($source -notmatch 'CERTIFICATE_PREIMAGE_READ_FAILED') { Fail 'Named certificate preimage-read failure is missing.' }
 
     $lsxScript = Join-Path $Root 'portable-lsx-responder.ps1'
     $table = Join-Path $Root 'lsx-table.json'
@@ -233,7 +236,7 @@ function Invoke-PackageSelfTest {
     if ($LASTEXITCODE -ne 0) {
         Fail "Bundled LSX responder self-test failed: $($selfTestOutput -join ' ')"
     }
-    Info 'PASS: package files, JSON, launch null-safety guards, binary assets, and LSX responder self-test.'
+    Info 'PASS: package files, JSON, launch null-safety guards, certificate-page readiness diagnostics, binary assets, and LSX responder self-test.'
 }
 
 function Test-TcpPort([string]$HostIp, [int]$Port, [int]$TimeoutMs = 2500) {
@@ -515,10 +518,22 @@ function Ensure-PatchType {
 using System;
 using System.Runtime.InteropServices;
 public static class Fifa15Native {
+  [StructLayout(LayoutKind.Sequential)]
+  public struct MEMORY_BASIC_INFORMATION {
+    public IntPtr BaseAddress;
+    public IntPtr AllocationBase;
+    public uint AllocationProtect;
+    public UIntPtr RegionSize;
+    public uint State;
+    public uint Protect;
+    public uint Type;
+  }
+
   [DllImport("kernel32.dll", SetLastError=true)] public static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
   [DllImport("kernel32.dll", SetLastError=true)] public static extern bool CloseHandle(IntPtr h);
   [DllImport("kernel32.dll", SetLastError=true)] public static extern bool WriteProcessMemory(IntPtr h, IntPtr addr, byte[] data, int size, out IntPtr written);
   [DllImport("kernel32.dll", SetLastError=true)] public static extern bool ReadProcessMemory(IntPtr h, IntPtr addr, byte[] data, int size, out IntPtr read);
+  [DllImport("kernel32.dll", SetLastError=true)] public static extern UIntPtr VirtualQueryEx(IntPtr h, IntPtr addr, out MEMORY_BASIC_INFORMATION info, UIntPtr length);
 }
 '@
 }
@@ -526,6 +541,67 @@ public static class Fifa15Native {
 function Get-BytesSha256([byte[]]$Bytes) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { return ([BitConverter]::ToString($sha.ComputeHash($Bytes))).Replace('-','') } finally { $sha.Dispose() }
+}
+
+function Get-FifaMemoryRegionDetail([IntPtr]$Handle, [IntPtr]$Address) {
+    $info = New-Object 'Fifa15Native+MEMORY_BASIC_INFORMATION'
+    $size = [Runtime.InteropServices.Marshal]::SizeOf($info)
+    $result = [Fifa15Native]::VirtualQueryEx($Handle, $Address, [ref]$info, [UIntPtr]$size)
+    if ($result -eq [UIntPtr]::Zero) {
+        $queryError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        return "virtual_query_error=$queryError"
+    }
+    return ("region_base=0x{0:X} region_size=0x{1:X} state=0x{2:X} protect=0x{3:X} type=0x{4:X}" -f $info.BaseAddress.ToInt64(),$info.RegionSize.ToUInt64(),$info.State,$info.Protect,$info.Type)
+}
+
+function Read-FifaPatchPreimage([IntPtr]$Handle, [IntPtr]$Address, [int]$ProcessId) {
+    $deadline = (Get-Date).AddSeconds(15)
+    $attempt = 0
+    $lastDetail = 'no read attempted'
+
+    do {
+        $attempt++
+        $live = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+        if (-not $live) {
+            return [pscustomobject]@{
+                Success = $false
+                Code = 'FIFA_EXITED_BEFORE_CERTIFICATE_PATCH'
+                Detail = "fifa15 PID $ProcessId exited before the certificate site became readable."
+                Bytes = $null
+            }
+        }
+
+        $buffer = New-Object byte[] 128
+        $read = [IntPtr]::Zero
+        $ok = [Fifa15Native]::ReadProcessMemory($Handle, $Address, $buffer, 128, [ref]$read)
+        if ($ok -and $read.ToInt64() -eq 128) {
+            if ($attempt -gt 1) {
+                Info "PASS: certificate patch site became readable after $attempt attempts."
+            }
+            return [pscustomobject]@{
+                Success = $true
+                Code = $null
+                Detail = $null
+                Bytes = $buffer
+            }
+        }
+
+        $win32Error = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        $bytesRead = $read.ToInt64()
+        $regionDetail = Get-FifaMemoryRegionDetail -Handle $Handle -Address $Address
+        $lastDetail = "attempt=$attempt win32_error=$win32Error bytes_read=$bytesRead $regionDetail"
+        if ($attempt -eq 1) {
+            Info "Certificate patch site is not readable yet ($lastDetail); waiting up to 15 seconds for the cracked build to finish mapping/unpacking it."
+        }
+        Start-Sleep -Milliseconds 250
+    } until ((Get-Date) -gt $deadline)
+
+    return [pscustomobject]@{
+        Success = $false
+        Code = 'CERTIFICATE_PREIMAGE_READ_FAILED'
+        Detail = "The certificate site at 0x$($Address.ToInt64().ToString('X')) never became readable within 15 seconds. $lastDetail"
+        Bytes = $null
+    }
 }
 
 function Wait-FifaProcessWithModule($Launch) {
@@ -633,23 +709,30 @@ function Launch-AndPatchFifa([string]$Exe) {
     Ensure-PatchType
     $handle = [Fifa15Native]::OpenProcess(0x1438, $false, [uint32]$process.Id)
     if ($handle -eq [IntPtr]::Zero) {
+        $openError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-        Fail-Code 'CERTIFICATE_PROCESS_ACCESS_FAILED' 'Windows refused access to inspect/patch FIFA 15 memory.'
+        Fail-Code 'CERTIFICATE_PROCESS_ACCESS_FAILED' "Windows refused access to inspect/patch FIFA 15 memory (win32_error=$openError)."
     }
-    try {
-        $address = New-Object IntPtr $addressValue
-        $before = New-Object byte[] 128
-        $readBefore = [IntPtr]::Zero
-        if (-not [Fifa15Native]::ReadProcessMemory($handle, $address, $before, 128, [ref]$readBefore) -or $readBefore.ToInt64() -ne 128) {
-            throw 'pre-patch ReadProcessMemory failed'
-        }
-        $script:PatchPreimageSha256 = Get-BytesSha256 $before
-        Info "Certificate patch site verified readable; preimage SHA-256 $script:PatchPreimageSha256"
 
+    $address = New-Object IntPtr $addressValue
+    $preimage = Read-FifaPatchPreimage -Handle $handle -Address $address -ProcessId $process.Id
+    if (-not $preimage.Success) {
+        [Fifa15Native]::CloseHandle($handle) | Out-Null
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        Fail-Code ([string]$preimage.Code) ([string]$preimage.Detail)
+    }
+
+    $before = [byte[]]$preimage.Bytes
+    $script:PatchPreimageSha256 = Get-BytesSha256 $before
+    Info "Certificate patch site verified readable; preimage SHA-256 $script:PatchPreimageSha256"
+
+    try {
         if ([Convert]::ToBase64String($before) -ne [Convert]::ToBase64String($bytes)) {
             $written = [IntPtr]::Zero
-            if (-not [Fifa15Native]::WriteProcessMemory($handle, $address, $bytes, $bytes.Length, [ref]$written) -or $written.ToInt64() -ne 128) {
-                throw 'WriteProcessMemory failed'
+            $writeOk = [Fifa15Native]::WriteProcessMemory($handle, $address, $bytes, $bytes.Length, [ref]$written)
+            if (-not $writeOk -or $written.ToInt64() -ne 128) {
+                $writeError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                throw "WriteProcessMemory failed (win32_error=$writeError bytes_written=$($written.ToInt64()))"
             }
         } else {
             Info 'Relay certificate was already present at the verified patch site; write skipped.'
@@ -657,8 +740,10 @@ function Launch-AndPatchFifa([string]$Exe) {
 
         $check = New-Object byte[] 128
         $read = [IntPtr]::Zero
-        if (-not [Fifa15Native]::ReadProcessMemory($handle, $address, $check, 128, [ref]$read) -or $read.ToInt64() -ne 128) {
-            throw 'post-patch ReadProcessMemory failed'
+        $readOk = [Fifa15Native]::ReadProcessMemory($handle, $address, $check, 128, [ref]$read)
+        if (-not $readOk -or $read.ToInt64() -ne 128) {
+            $readError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+            throw "post-patch ReadProcessMemory failed (win32_error=$readError bytes_read=$($read.ToInt64()))"
         }
         if ([Convert]::ToBase64String($check) -ne [Convert]::ToBase64String($bytes)) { throw 'certificate readback mismatch' }
     } catch {
