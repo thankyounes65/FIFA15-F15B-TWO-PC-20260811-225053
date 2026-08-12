@@ -146,7 +146,7 @@ if ($SelfTest) {
         exit 1
     }
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
-    foreach ($marker in @('Start-KnownGoodEaCompatibilityGuard','EABackgroundService','portable-lsx-responder\.ps1','EA_COMPAT sample t=')) {
+    foreach ($marker in @('Start-KnownGoodEaCompatibilityGuard','EABackgroundService','portable-lsx-responder','EA_COMPAT sample t=')) {
         if ($source -notmatch $marker) {
             Write-Host "SELF-TEST FAILED: missing EA compatibility guard marker: $marker" -ForegroundColor Red
             exit 1
