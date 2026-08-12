@@ -19,10 +19,13 @@ jobs:
           if (Test-Path -LiteralPath '.\JOIN.key') { throw 'Public tester HEAD must not contain JOIN.key' }
           $bat = Get-Content -LiteralPath '.\RUN-FIFA15-F15B.bat' -Raw
           if ($bat -notmatch 'tailscale-bootstrap\.ps1') { throw 'RUN BAT must bootstrap missing Tailscale' }
+          if ($bat -notmatch 'loopback-relay-forwarder\.ps1.*-Start') { throw 'RUN BAT must start the remote QoS/FUT loopback forwarder' }
           if ($bat -notmatch 'diagnostic-run\.ps1') { throw 'RUN BAT must enter through diagnostic-run.ps1' }
           .\tailscale-bootstrap.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\tailscale-preflight.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\loopback-relay-forwarder.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\diagnostic-run.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
