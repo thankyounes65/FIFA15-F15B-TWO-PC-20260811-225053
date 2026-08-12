@@ -1,0 +1,161 @@
+{
+  "format": 1,
+  "recorded_utc": "2026-08-12T08:09:00Z",
+  "purpose": "Reconstruct the exact Player B state that booted FIFA 15, connected through the preservation relay, entered FUT, and reached two-player matchmaking.",
+  "evidence_policy": "Hashes only. Proprietary FIFA/crack binaries are not redistributed by this public repository.",
+  "package": {
+    "role": "f15b",
+    "host_ip": "100.91.142.54",
+    "guest_runtime_revision": "ea-readiness-v1 + loopback-forwarder-17502-17503",
+    "last_pre_documentation_public_commit": "48e823bea4389b1789ec7cd405ebfdfbb7cfcab5"
+  },
+  "platform": {
+    "os_family": "Windows",
+    "native_architecture": "AMD64",
+    "windows_on_arm_supported": false,
+    "administrator_required": true
+  },
+  "network": {
+    "overlay": "Tailscale",
+    "account_rule": "Tester uses their own Tailscale account and accepts a machine share for the host. Do not share the host owner's account credentials.",
+    "observed_guest_ip": "100.101.2.29",
+    "host_ip": "100.91.142.54",
+    "ready_beacon_tcp": 48215,
+    "relay_ports": [42127, 42230, 42128, 17502, 17503],
+    "guest_loopback_forwarders": [
+      {"local": "127.0.0.1:17502", "remote": "100.91.142.54:17502", "purpose": "QoS/TLS"},
+      {"local": "127.0.0.1:17503", "remote": "100.91.142.54:17503", "purpose": "FUT REST"}
+    ],
+    "dirtysdk_demangler": "peach.online.ea.com remains pinned to 127.0.0.1 on Player B",
+    "redirected_hostname_source": "fifa15-managed-hostnames.ps1"
+  },
+  "ea_app": {
+    "observed_version": "13.764.6.6279",
+    "exact_version_proven_required": false,
+    "lsx_listener": "package portable LSX responder must own 127.0.0.1:3216 before EA App startup",
+    "readiness_timeout_seconds": 60,
+    "stability_window_seconds": 10,
+    "required_observed_state_before_fifa": {
+      "EADesktop.exe": ">=1",
+      "EABackgroundService": "Running",
+      "EALocalHostSvc.exe": ">=1",
+      "EACefSubProcess.exe": ">=1",
+      "package_lsx_still_owns_3216": true
+    }
+  },
+  "certificate_patch": {
+    "target": "fifa15.exe",
+    "module_base_observed": "0x140000000",
+    "absolute_address_observed": "0x141E1F1A0",
+    "rva": "0x01E1F1A0",
+    "bytes": 128,
+    "delay_after_attach_ms": 500,
+    "payload_file": "ca_modulus_1024.bin",
+    "payload_sha256": "5A6C7E9A1DAF98099BBE5C97C4ABD5FE6315FDDA4439F77A18635EE56C146A3A",
+    "readback_required": true
+  },
+  "game_files": [
+    {
+      "relative_path": "fifa15.exe",
+      "bytes": 87268816,
+      "sha256": "3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB",
+      "status": "CONFIRMED_ON_IAN_AND_HOST",
+      "policy": "required_to_reproduce_exact_current_baseline"
+    },
+    {
+      "relative_path": "ItsAMe_Origin.dll",
+      "bytes": 25088,
+      "sha256": "5B141FB03C6F50228E48DDAF8DFB49428194A1F01BE1A63C826C5BCE4DEC487A",
+      "status": "CONFIRMED_ON_IAN_AND_HOST",
+      "policy": "required_to_reproduce_exact_current_baseline"
+    },
+    {
+      "relative_path": "sysdllzf.dll",
+      "bytes": 10240,
+      "sha256": "B477BACB277F43A9C93C4E4D8B47E1F0F8B6B2E9751A218448B8D1B17A5DCF87",
+      "status": "CONFIRMED_ON_IAN_SUCCESSFUL_RUN",
+      "policy": "required_to_reproduce_exact_current_baseline",
+      "note": "This is the original/logging-disabled byte. The host's AE283399... variant differs by the debug logging flag and is NOT required for Player B."
+    },
+    {
+      "relative_path": "BCEnginezf.dll",
+      "bytes": 1113600,
+      "sha256": "009E8936E4E79499E189FE4A4E821B283FF8E830BE697F5E55873677BB4C3B01",
+      "status": "CONFIRMED_ON_IAN_AND_HOST",
+      "policy": "preserve_exact_current_baseline"
+    },
+    {
+      "relative_path": "CardsDLLzf.dll",
+      "bytes": 2046464,
+      "sha256": "51681FC42607CABAB2CB11B444078DDF6E9B1FBDC6A85DED9ECF43AC0F4D8C49",
+      "status": "CONFIRMED_ON_IAN_AFTER_MANUAL_COPY_AND_HOST",
+      "policy": "preserve_exact_current_baseline",
+      "note": "Ian had 82D4A6E1... before the manual copy. FIFA boot was already possible before this change, so this hash is exact-current-baseline rather than independently proven as the boot fix."
+    },
+    {
+      "relative_path": "dbdata.dll",
+      "bytes": 639597,
+      "sha256": "FDDB8D45464CEF3FF089609DC71342D347AF62A36FB1E4AE8A75FBCA33DF88BF",
+      "status": "CONFIRMED_ON_IAN_AND_HOST",
+      "policy": "preserve_exact_current_baseline",
+      "note": "This file was initially missing on Ian. Necessity was not isolated from the EA-readiness fix."
+    },
+    {
+      "relative_path": "d3dcompiler_46.dll",
+      "bytes": 3873264,
+      "sha256": "9614DE7BAC24091E2ABAF70B3C852DDF9B92A48157C557C3C63D81D88D4D5CEB",
+      "status": "CONFIRMED_ON_IAN_AND_HOST",
+      "policy": "preserve_exact_current_baseline"
+    },
+    {
+      "relative_path": "winui.dll",
+      "bytes": 267584,
+      "sha256": "B4B1935EE76F434685F0515B0E5DFC18ADFD2DAEAE50F32EF85EC6FFAAADE63C",
+      "status": "CONFIRMED_ON_IAN_AND_HOST",
+      "policy": "preserve_exact_current_baseline"
+    },
+    {
+      "relative_path": "OriginSetup.exe",
+      "bytes": 6403584,
+      "sha256": "EC0765A1F39E55A39E378150270F39E90C93ADEE59272B947011232C3CED524D",
+      "status": "CONFIRMED_ON_IAN_AND_HOST",
+      "policy": "reference_only_not_loaded_as_early_companion"
+    },
+    {
+      "relative_path": "CPY.ini",
+      "bytes": 60,
+      "sha256": "8B6756120C45CF157A4E84F10CC29D7ED3BB6B077C035AD47A8FBE809FE5CF14",
+      "status": "CONFIRMED_ON_IAN_CURRENT_BASELINE",
+      "policy": "preserve_exact_current_baseline"
+    },
+    {
+      "relative_path": "dlc\\dlc_powdll\\dlc\\powdll\\powdllzf.dll",
+      "sha256": "D2005D098D2043C5E0B5050094548E809F6EE4A6FEC33D4AAE34056A378B42D0",
+      "status": "HOST_REFERENCE_PLUS_OPERATOR_REPORTED_COPY_TO_IAN_NOT_POST_COPY_FINGERPRINTED",
+      "policy": "verify_if_reconstructing_current_manual-copy_baseline",
+      "note": "The final Ian diagnostic fingerprint covered top-level launch files and did not recurse into this DLC path. Do not upgrade this status to CONFIRMED_ON_IAN without a new hash capture."
+    }
+  ],
+  "proven_runtime_chain": [
+    "Tailscale host machine visible to tester account",
+    "Host READY beacon reachable and relay TCP 42127 reachable",
+    "Exact pre-test Windows/hosts/EA/Tailscale state snapshotted",
+    "Package LSX responder owns 127.0.0.1:3216",
+    "EA App started behind package LSX",
+    "EA readiness state held stable for 10 seconds",
+    "14 relay hostnames routed to host; peach.online.ea.com kept local",
+    "fifa15.exe launched from its own game directory",
+    "128-byte OTG3 modulus written after the proven 500 ms delay and read back",
+    "FIFA made an LSX connection",
+    "Guest-local 17502 and 17503 listeners transparently forwarded QoS/FUT to host",
+    "Player B entered Ultimate Team",
+    "Player B reached Online Single Match matchmaking with Player A"
+  ],
+  "not_required": [
+    "Host owner's EA account credentials",
+    "Host owner's Tailscale account credentials",
+    "JOIN.key in the public repository",
+    "Host sysdllzf.dll logging-enabled AE283399... variant",
+    "Manual edits to the Windows hosts file outside the launcher"
+  ]
+}
