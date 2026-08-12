@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param([switch]$SelfTest)
+param(
+    [switch]$Cleanup,
+    [switch]$SelfTest
+)
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSCommandPath
@@ -26,6 +29,9 @@ function Has-ExistingTailscaleConnection {
 function Restore-HeldKey {
     if ((Test-Path -LiteralPath $HeldKey) -and -not (Test-Path -LiteralPath $JoinKey)) {
         Move-Item -LiteralPath $HeldKey -Destination $JoinKey -Force
+        Write-Host '  Restored temporarily quarantined JOIN.key to its original package name.' -ForegroundColor Gray
+    } elseif ((Test-Path -LiteralPath $HeldKey) -and (Test-Path -LiteralPath $JoinKey)) {
+        throw 'Both JOIN.key and its quarantined copy exist. Cleanup will not guess which one is authoritative.'
     }
 }
 
@@ -38,10 +44,10 @@ if ($SelfTest) {
         exit 1
     }
     if (-not (Test-Path -LiteralPath $SafeRun -PathType Leaf)) {
-        Write-Host "SELF-TEST FAILED: missing safe-run.ps1" -ForegroundColor Red
+        Write-Host 'SELF-TEST FAILED: missing safe-run.ps1' -ForegroundColor Red
         exit 1
     }
-    Write-Host 'PASS: launch guard parses; an existing Tailscale connection will never consume JOIN.key.' -ForegroundColor Green
+    Write-Host 'PASS: launch guard parses; existing Tailscale cannot consume JOIN.key; cleanup can restore a quarantined key.' -ForegroundColor Green
     exit 0
 }
 
@@ -50,12 +56,23 @@ if (-not (Test-Path -LiteralPath $SafeRun -PathType Leaf)) {
     exit 1
 }
 
+if ($Cleanup) {
+    try {
+        Restore-HeldKey
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $SafeRun -Cleanup | Out-Host
+        exit ([int]$LASTEXITCODE)
+    } catch {
+        Write-Host "STOP: cleanup guard failed: $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
+    }
+}
+
 Restore-HeldKey
 $held = $false
 try {
     if ((Has-ExistingTailscaleConnection) -and (Test-Path -LiteralPath $JoinKey)) {
         if (Test-Path -LiteralPath $HeldKey) {
-            Write-Host "STOP: both JOIN.key and its held copy exist. Do not continue; keep both files and tell thankyounes." -ForegroundColor Red
+            Write-Host 'STOP: both JOIN.key and its held copy exist. Do not continue; keep both files and tell thankyounes.' -ForegroundColor Red
             exit 1
         }
         Move-Item -LiteralPath $JoinKey -Destination $HeldKey
