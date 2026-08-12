@@ -14,7 +14,7 @@ $HostsPath = Join-Path $env:WINDIR 'System32\drivers\etc\hosts'
 $StartMarker = '# BEGIN FIFA15-TWO-PC-APPLIANCE'
 $EndMarker = '# END FIFA15-TWO-PC-APPLIANCE'
 $ReadyPort = 48215
-$PackageRevision = 'hardening-v6'
+$PackageRevision = 'ea-readiness-v1'
 $RelayHostnames = @()
 $PatchPreimageSha256 = $null
 
@@ -229,6 +229,9 @@ function Invoke-PackageSelfTest {
     if ($source -notmatch 'Matching proven host CA timing: waiting 500 ms before direct write') { Fail 'Proven direct-write CA timing marker is missing.' }
     if ($source -notmatch 'CERTIFICATE_WRITE_FAILED') { Fail 'Named certificate write failure is missing.' }
     if ($source -notmatch 'Report-CrackCompanions') { Fail 'Crack companion evidence helper is missing.' }
+    if ($source -notmatch 'Wait-EaAppReady') { Fail 'EA App readiness gate is missing.' }
+    if ($source -notmatch 'EA_APP_NOT_READY') { Fail 'Named EA App readiness failure is missing.' }
+    if ($source -notmatch 'EA App readiness stable for 10 seconds before FIFA launch') { Fail 'EA App readiness stability marker is missing.' }
 
     $lsxScript = Join-Path $Root 'portable-lsx-responder.ps1'
     $table = Join-Path $Root 'lsx-table.json'
@@ -236,7 +239,7 @@ function Invoke-PackageSelfTest {
     if ($LASTEXITCODE -ne 0) {
         Fail "Bundled LSX responder self-test failed: $($selfTestOutput -join ' ')"
     }
-    Info 'PASS: package files, JSON, launch null-safety guards, proven direct-write CA timing, crack companion evidence, binary assets, and LSX responder self-test.'
+    Info 'PASS: package files, JSON, launch null-safety guards, EA App readiness gate, proven direct-write CA timing, crack companion evidence, binary assets, and LSX responder self-test.'
 }
 
 function Test-TcpPort([string]$HostIp, [int]$Port, [int]$TimeoutMs = 2500) {
@@ -442,6 +445,47 @@ function Stop-BundledEaStub {
         ForEach-Object { Stop-Process -Id ([int]$_.ProcessId) -Force -ErrorAction SilentlyContinue }
 }
 
+function Wait-EaAppReady([int]$LsxPid, [int]$TimeoutSeconds = 60, [int]$StableSeconds = 10) {
+    Info "Waiting for the real EA App to become fully ready before FIFA launch (timeout=${TimeoutSeconds}s, stable=${StableSeconds}s)."
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $stableSince = $null
+    $lastState = 'not sampled'
+
+    while ((Get-Date) -lt $deadline) {
+        $listener = Get-NetTCPConnection -LocalAddress '127.0.0.1' -LocalPort 3216 -State Listen -ErrorAction SilentlyContinue |
+            Where-Object { $_.OwningProcess -eq $LsxPid } | Select-Object -First 1
+        if (-not $listener) {
+            Fail-Code 'LSX_RESPONDER_LOST_DURING_EA_STARTUP' "The package LSX responder (PID $LsxPid) lost 127.0.0.1:3216 while waiting for EA App readiness. FIFA was not launched."
+        }
+
+        $desktop = @(Get-Process -Name EADesktop -ErrorAction SilentlyContinue)
+        $localHost = @(Get-Process -Name EALocalHostSvc -ErrorAction SilentlyContinue)
+        $cef = @(Get-Process -Name EACefSubProcess -ErrorAction SilentlyContinue)
+        $service = Get-Service -Name EABackgroundService -ErrorAction SilentlyContinue
+        $serviceStatus = if ($service) { [string]$service.Status } else { '<missing>' }
+        $lastState = "EADesktop=$($desktop.Count) EABackgroundService=$serviceStatus EALocalHostSvc=$($localHost.Count) EACefSubProcess=$($cef.Count) LSX_PID=$LsxPid"
+
+        $ready = ($desktop.Count -gt 0 -and $serviceStatus -eq 'Running' -and $localHost.Count -gt 0 -and $cef.Count -gt 0)
+        if ($ready) {
+            if (-not $stableSince) {
+                $stableSince = Get-Date
+                Info "EA App readiness observed; holding it stable before FIFA launch ($lastState)."
+            }
+            $stableFor = ((Get-Date) - $stableSince).TotalSeconds
+            if ($stableFor -ge $StableSeconds) {
+                Info "PASS: EA App readiness stable for 10 seconds before FIFA launch ($lastState)."
+                return
+            }
+        } else {
+            $stableSince = $null
+        }
+
+        Start-Sleep -Milliseconds 250
+    }
+
+    Fail-Code 'EA_APP_NOT_READY' "EA App never reached the required pre-FIFA state within ${TimeoutSeconds}s. Last state: $lastState. FIFA was not launched."
+}
+
 function Prepare-OriginLsx {
     Step 'Preparing the self-contained Origin/LSX compatibility layer'
 
@@ -504,15 +548,16 @@ function Prepare-OriginLsx {
     if (Test-Path $realEa) {
         Start-Process $realEa | Out-Null
         Info 'Existing EA Desktop process started after LSX claimed its port.'
+        Wait-EaAppReady -LsxPid $lsxProcess.Id
     } else {
         $eaStub = Join-Path $Root 'runtime\EADesktop.exe'
         New-Item -ItemType Directory -Path (Split-Path -Parent $eaStub) -Force | Out-Null
         Copy-Item (Join-Path $env:WINDIR 'System32\PING.EXE') $eaStub -Force
         Start-Process $eaStub -ArgumentList @('-t','127.0.0.1') -WorkingDirectory (Split-Path -Parent $eaStub) -WindowStyle Hidden | Out-Null
         Info 'No EA Desktop installation found; bundled process-presence compatibility stub started.'
+        Start-Sleep -Seconds 1
     }
 
-    Start-Sleep -Seconds 1
     $verified = Get-NetTCPConnection -LocalAddress '127.0.0.1' -LocalPort 3216 -State Listen -ErrorAction SilentlyContinue |
         Where-Object { $_.OwningProcess -eq $lsxProcess.Id } | Select-Object -First 1
     if (-not $verified) { Fail 'The bundled LSX responder lost ownership of 127.0.0.1:3216 during startup.' }
