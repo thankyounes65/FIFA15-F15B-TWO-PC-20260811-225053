@@ -47,7 +47,7 @@ if ($SelfTest) {
         Write-Host 'SELF-TEST FAILED: missing safe-run.ps1' -ForegroundColor Red
         exit 1
     }
-    Write-Host 'PASS: launch guard parses; existing Tailscale cannot consume JOIN.key; cleanup can restore a quarantined key.' -ForegroundColor Green
+    Write-Host 'PASS: launch guard parses; existing Tailscale cannot consume JOIN.key; emergency cleanup always reaches the machine restore.' -ForegroundColor Green
     exit 0
 }
 
@@ -57,14 +57,17 @@ if (-not (Test-Path -LiteralPath $SafeRun -PathType Leaf)) {
 }
 
 if ($Cleanup) {
-    try {
-        Restore-HeldKey
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $SafeRun -Cleanup | Out-Host
-        exit ([int]$LASTEXITCODE)
-    } catch {
-        Write-Host "STOP: cleanup guard failed: $($_.Exception.Message)" -ForegroundColor Red
+    $keyError = $null
+    try { Restore-HeldKey } catch { $keyError = $_.Exception.Message }
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $SafeRun -Cleanup | Out-Host
+    $cleanupRc = [int]$LASTEXITCODE
+
+    if ($keyError) {
+        Write-Host "WARNING: PC cleanup was attempted, but package key-file restoration needs review: $keyError" -ForegroundColor Yellow
         exit 1
     }
+    exit $cleanupRc
 }
 
 Restore-HeldKey
