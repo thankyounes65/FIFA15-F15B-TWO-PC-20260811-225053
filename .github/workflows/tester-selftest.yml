@@ -12,8 +12,11 @@ jobs:
       - name: Check out tester package
         uses: actions/checkout@v4
 
-      - name: Run non-invasive package self-test
+      - name: Run non-invasive package self-tests
         shell: powershell
         run: |
           Set-StrictMode -Version Latest
+          .\tailscale-preflight.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\safe-run.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
