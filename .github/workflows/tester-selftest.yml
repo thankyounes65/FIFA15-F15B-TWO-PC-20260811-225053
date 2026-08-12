@@ -18,5 +18,7 @@ jobs:
           Set-StrictMode -Version Latest
           .\tailscale-preflight.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\launch-safe.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\safe-run.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
