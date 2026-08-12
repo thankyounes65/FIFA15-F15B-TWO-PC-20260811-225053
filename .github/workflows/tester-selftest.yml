@@ -17,10 +17,35 @@ jobs:
         run: |
           Set-StrictMode -Version Latest
           if (Test-Path -LiteralPath '.\JOIN.key') { throw 'Public tester HEAD must not contain JOIN.key' }
+
+          foreach ($required in @(
+            '.\README-FIRST.txt',
+            '.\PLAYER-B-BOOT-AND-CONNECT.md',
+            '.\PLAYER-B-KNOWN-GOOD.json',
+            '.\VERIFY-PLAYER-B-GAME-FILES.ps1',
+            '.\VERIFY-PLAYER-B-GAME-FILES.bat'
+          )) {
+            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "missing Player B reconstruction file: $required" }
+          }
+
+          $known = Get-Content -LiteralPath '.\PLAYER-B-KNOWN-GOOD.json' -Raw | ConvertFrom-Json
+          if ([int]$known.format -ne 1) { throw 'Unsupported PLAYER-B-KNOWN-GOOD.json format' }
+          if ([string]$known.package.guest_runtime_revision -notmatch 'ea-readiness-v1') { throw 'Known-good contract lost EA readiness revision' }
+          $forwardPorts = @($known.network.guest_loopback_forwarders | ForEach-Object { [int](($_.local -split ':')[-1]) } | Sort-Object -Unique)
+          if ($forwardPorts.Count -ne 2 -or 17502 -notin $forwardPorts -or 17503 -notin $forwardPorts) { throw 'Known-good contract must pin only the two proven guest loopback forward ports' }
+
+          $readme = Get-Content -LiteralPath '.\README-FIRST.txt' -Raw
+          foreach ($marker in @('PLAYER-B-BOOT-AND-CONNECT.md','VERIFY-PLAYER-B-GAME-FILES.bat','F15B_LOOPBACK_FORWARDER_READY','EA readiness stable for 10 seconds')) {
+            if (-not $readme.Contains($marker)) { throw "README missing working-state marker: $marker" }
+          }
+
           $bat = Get-Content -LiteralPath '.\RUN-FIFA15-F15B.bat' -Raw
           if ($bat -notmatch 'tailscale-bootstrap\.ps1') { throw 'RUN BAT must bootstrap missing Tailscale' }
           if ($bat -notmatch 'loopback-relay-forwarder\.ps1.*-Start') { throw 'RUN BAT must start the remote QoS/FUT loopback forwarder' }
           if ($bat -notmatch 'diagnostic-run\.ps1') { throw 'RUN BAT must enter through diagnostic-run.ps1' }
+
+          .\VERIFY-PLAYER-B-GAME-FILES.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\tailscale-bootstrap.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\tailscale-preflight.ps1 -SelfTest
