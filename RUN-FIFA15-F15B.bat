@@ -13,7 +13,7 @@ if not "%RC%"=="0" (
   exit /b %RC%
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0safe-run.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0launch-safe.ps1"
 set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" (
   echo.
