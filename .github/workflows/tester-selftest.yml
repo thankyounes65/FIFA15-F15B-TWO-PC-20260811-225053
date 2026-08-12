@@ -27,6 +27,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\loopback-relay-forwarder.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          try {
+            .\loopback-relay-forwarder.ps1 -Start
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $forwarded = @(Get-NetTCPConnection -LocalAddress '127.0.0.1' -State Listen -ErrorAction Stop | Where-Object { $_.LocalPort -in @(17502,17503) })
+            $ports = @($forwarded.LocalPort | Sort-Object -Unique)
+            if ($ports.Count -ne 2 -or 17502 -notin $ports -or 17503 -notin $ports) { throw 'Forwarder did not own both required loopback ports.' }
+          } finally {
+            .\loopback-relay-forwarder.ps1 -Stop
+          }
           .\diagnostic-run.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\launch-safe.ps1 -SelfTest
