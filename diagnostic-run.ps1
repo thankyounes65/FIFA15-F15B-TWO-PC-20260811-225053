@@ -30,6 +30,7 @@ function Get-Diagnosis([string]$Text, [int]$ExitCode) {
     if ($Text -match 'STOP \[FIFA_START_FAILED\]') { return 'FIFA_START_FAILED' }
     if ($Text -match 'STOP \[FIFA_PROCESS_NOT_FOUND\]') { return 'FIFA_PROCESS_NOT_FOUND' }
     if ($Text -match 'STOP \[FIFA_MODULE_NOT_READY\]') { return 'FIFA_MODULE_NOT_READY' }
+    if ($Text -match 'STOP \[FIFA_EXITED_BEFORE_CERTIFICATE_PATCH\]') { return 'FIFA_EXITED_BEFORE_CERTIFICATE_PATCH' }
     if ($Text -match 'STOP \[HOSTS_WRITE_LOCKED\]') { return 'HOSTS_WRITE_LOCKED' }
     if ($Text -match 'TAILSCALE_HOST_NOT_SHARED') { return 'TAILSCALE_HOST_NOT_SHARED' }
     if ($Text -match 'TAILSCALE_NOT_CONNECTED') { return 'TAILSCALE_NOT_CONNECTED' }
@@ -39,7 +40,7 @@ function Get-Diagnosis([string]$Text, [int]$ExitCode) {
     if ($Text -match 'never reported READY') { return 'HOST_NOT_READY' }
     if ($Text -match 'TCP 3216 is already owned') { return 'LSX_PORT_CONFLICT' }
     if ($Text -match 'LSX responder did not become the verified owner|LSX responder lost ownership') { return 'LSX_RESPONDER_FAILED' }
-    if ($Text -match 'pre-patch ReadProcessMemory failed') { return 'CERTIFICATE_PREIMAGE_READ_FAILED' }
+    if ($Text -match 'STOP \[CERTIFICATE_PREIMAGE_READ_FAILED\]|pre-patch ReadProcessMemory failed') { return 'CERTIFICATE_PREIMAGE_READ_FAILED' }
     if ($Text -match 'STOP \[CERTIFICATE_LAYOUT_DIFFERENT\]|does not map the known certificate patch location safely') { return 'CERTIFICATE_LAYOUT_DIFFERENT' }
     if ($Text -match 'STOP \[CERTIFICATE_PROCESS_ACCESS_FAILED\]|Windows refused access to inspect/patch FIFA 15 memory') { return 'CERTIFICATE_PROCESS_ACCESS_FAILED' }
     if ($Text -match 'WriteProcessMemory failed') { return 'CERTIFICATE_WRITE_FAILED' }
@@ -106,7 +107,9 @@ function Invoke-SelfTest {
     if ((Get-Diagnosis 'STOP [TAILSCALE_HOST_NOT_SHARED]: nope' 1) -ne 'TAILSCALE_HOST_NOT_SHARED') { throw 'Tailscale classifier failed' }
     if ((Get-Diagnosis 'STOP [FIFA_PROCESS_NOT_FOUND]: nope' 1) -ne 'FIFA_PROCESS_NOT_FOUND') { throw 'FIFA process classifier failed' }
     if ((Get-Diagnosis 'STOP [FIFA_MODULE_NOT_READY]: nope' 1) -ne 'FIFA_MODULE_NOT_READY') { throw 'FIFA module classifier failed' }
-    if ((Get-Diagnosis 'Certificate patch failed: pre-patch ReadProcessMemory failed' 1) -ne 'CERTIFICATE_PREIMAGE_READ_FAILED') { throw 'certificate classifier failed' }
+    if ((Get-Diagnosis 'STOP [FIFA_EXITED_BEFORE_CERTIFICATE_PATCH]: nope' 1) -ne 'FIFA_EXITED_BEFORE_CERTIFICATE_PATCH') { throw 'FIFA pre-certificate exit classifier failed' }
+    if ((Get-Diagnosis 'STOP [CERTIFICATE_PREIMAGE_READ_FAILED]: win32_error=299' 1) -ne 'CERTIFICATE_PREIMAGE_READ_FAILED') { throw 'certificate preimage classifier failed' }
+    if ((Get-Diagnosis 'Certificate patch failed: pre-patch ReadProcessMemory failed' 1) -ne 'CERTIFICATE_PREIMAGE_READ_FAILED') { throw 'legacy certificate classifier failed' }
     if ((Get-Diagnosis 'STOP [HOSTS_WRITE_LOCKED]: retry exhausted' 1) -ne 'HOSTS_WRITE_LOCKED') { throw 'hosts-lock classifier failed' }
     if (-not (Test-HostsWriteLock "Set-Content : The process cannot access the file 'C:\WINDOWS\System32\drivers\etc\hosts' because it is being used by another process.")) { throw 'hosts-lock detector failed' }
     if ((Get-Diagnosis 'FIFA 15 ready (PID 123); relay certificate verified.' 0) -ne 'RUNTIME_LAUNCH_VERIFIED') { throw 'success classifier failed' }
