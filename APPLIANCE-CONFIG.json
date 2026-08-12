@@ -1,8 +1,9 @@
 {
-  "format": 2,
+  "format": 1,
   "role": "f15b",
   "host_ip": "100.91.142.54",
   "test_id": "20260811-225053",
+  "source_branch": "integration/test-matchmaking-two-client-pairing-v11",
   "guest_runtime_baseline": "ea-readiness-v1+loopback-forwarder-17502-17503",
   "host_runtime_policy": "coordinator-selected; guest boot/connect package is intentionally independent of host matchmaking branch",
   "historical_source_branch": "integration/test-matchmaking-two-client-pairing-v11",
