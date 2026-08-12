@@ -9,7 +9,7 @@ $Root = Split-Path -Parent $PSCommandPath
 $SafeRun = Join-Path $Root 'safe-run.ps1'
 $JoinKey = Join-Path $Root 'JOIN.key'
 $HeldKey = Join-Path $Root 'JOIN.key.not-used-with-existing-tailscale'
-$EaGuardRevision = 'ea-state-v1'
+$EaGuardRevision = 'ea-state-v2'
 
 function Find-Tailscale {
     foreach ($path in @("$env:ProgramFiles\Tailscale\tailscale.exe", "$env:ProgramFiles(x86)\Tailscale\tailscale.exe")) {
@@ -37,10 +37,11 @@ function Restore-HeldKey {
 }
 
 function Start-KnownGoodEaCompatibilityGuard {
-    $job = Start-Job -ArgumentList $Root,$EaGuardRevision -ScriptBlock {
+    return Start-Job -ArgumentList $Root,$EaGuardRevision -ScriptBlock {
         param([string]$PackageRoot,[string]$Revision)
         $ErrorActionPreference = 'Continue'
-        Write-Output "EA_COMPAT_GUARD: revision=$Revision waiting for package LSX ownership of 127.0.0.1:3216."
+        Write-Output "EA_COMPAT_GUARD_READY revision=$Revision package_root=$PackageRoot"
+        Write-Output 'EA_COMPAT_GUARD: waiting for package LSX ownership of 127.0.0.1:3216.'
 
         $lsxOwner = $null
         $deadline = (Get-Date).AddSeconds(45)
@@ -53,7 +54,7 @@ function Start-KnownGoodEaCompatibilityGuard {
                     break
                 }
             }
-            Start-Sleep -Milliseconds 50
+            Start-Sleep -Milliseconds 25
         }
 
         if (-not $lsxOwner) {
@@ -92,7 +93,7 @@ function Start-KnownGoodEaCompatibilityGuard {
         $fifaDeadline = (Get-Date).AddSeconds(45)
         while ((Get-Date) -lt $fifaDeadline -and -not $fifa) {
             $fifa = Get-Process -Name fifa15 -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $fifa) { Start-Sleep -Milliseconds 25 }
+            if (-not $fifa) { Start-Sleep -Milliseconds 10 }
         }
         if (-not $fifa) {
             Write-Output 'EA_COMPAT_GUARD: fifa15.exe was not observed after the known-good EA state was established.'
@@ -102,7 +103,7 @@ function Start-KnownGoodEaCompatibilityGuard {
         $pidValue = [int]$fifa.Id
         Write-Output "EA_COMPAT_GUARD: observed fifa15 pid=$pidValue; sampling early companion-module state."
         $lastMs = 0
-        foreach ($sampleMs in @(0,100,250,500,1000)) {
+        foreach ($sampleMs in @(0,50,100,250,500,1000)) {
             if ($sampleMs -gt $lastMs) { Start-Sleep -Milliseconds ($sampleMs - $lastMs) }
             $lastMs = $sampleMs
             $procNow = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
@@ -119,7 +120,23 @@ function Start-KnownGoodEaCompatibilityGuard {
             if (-not $alive) { break }
         }
     }
-    return $job
+}
+
+function Wait-EaCompatibilityGuardReady($Job) {
+    if (-not $Job) { throw 'EA compatibility guard job was not created.' }
+    $deadline = (Get-Date).AddSeconds(10)
+    while ((Get-Date) -lt $deadline) {
+        $rows = @(Receive-Job -Job $Job -Keep -ErrorAction SilentlyContinue)
+        if (@($rows | Where-Object { [string]$_ -match '^EA_COMPAT_GUARD_READY ' }).Count -gt 0) {
+            Write-Host "  EA compatibility guard is actively watching before the safe runner starts ($EaGuardRevision)." -ForegroundColor Gray
+            return
+        }
+        if ($Job.State -eq 'Failed') {
+            throw 'EA compatibility guard failed before the safe runner started.'
+        }
+        Start-Sleep -Milliseconds 50
+    }
+    throw 'EA compatibility guard did not become ready before the safe runner; FIFA was not started.'
 }
 
 function Stop-AndReportEaCompatibilityGuard($Job) {
@@ -146,13 +163,13 @@ if ($SelfTest) {
         exit 1
     }
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
-    foreach ($marker in @('Start-KnownGoodEaCompatibilityGuard','EABackgroundService','portable-lsx-responder','EA_COMPAT sample t=')) {
+    foreach ($marker in @('Start-KnownGoodEaCompatibilityGuard','Wait-EaCompatibilityGuardReady','EA_COMPAT_GUARD_READY','EABackgroundService','portable-lsx-responder','EA_COMPAT sample t=')) {
         if ($source -notmatch $marker) {
             Write-Host "SELF-TEST FAILED: missing EA compatibility guard marker: $marker" -ForegroundColor Red
             exit 1
         }
     }
-    Write-Host 'PASS: launch guard parses; existing Tailscale cannot consume JOIN.key; known-good EA background-service guard is armed before the safe runner; emergency cleanup always reaches the machine restore.' -ForegroundColor Green
+    Write-Host 'PASS: launch guard parses; existing Tailscale cannot consume JOIN.key; known-good EA guard must prove it is actively watching before the safe runner; emergency cleanup always reaches the machine restore.' -ForegroundColor Green
     exit 0
 }
 
@@ -189,8 +206,9 @@ try {
         Write-Host '  Existing Tailscale connection detected; JOIN.key is quarantined for this run and cannot switch accounts/tailnets.' -ForegroundColor Gray
     }
 
-    Write-Host "  EA compatibility guard armed ($EaGuardRevision): it will start EABackgroundService only after package LSX owns 3216." -ForegroundColor Gray
+    Write-Host "  EA compatibility guard arming ($EaGuardRevision): it will start EABackgroundService only after package LSX owns 3216." -ForegroundColor Gray
     $eaGuard = Start-KnownGoodEaCompatibilityGuard
+    Wait-EaCompatibilityGuardReady $eaGuard
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $SafeRun | Out-Host
     $rc = [int]$LASTEXITCODE
 } finally {
