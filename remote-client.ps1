@@ -14,7 +14,7 @@ $HostsPath = Join-Path $env:WINDIR 'System32\drivers\etc\hosts'
 $StartMarker = '# BEGIN FIFA15-TWO-PC-APPLIANCE'
 $EndMarker = '# END FIFA15-TWO-PC-APPLIANCE'
 $ReadyPort = 48215
-$PackageRevision = 'hardening-v2'
+$PackageRevision = 'hardening-v3'
 $RelayHostnames = @()
 $PatchPreimageSha256 = $null
 
@@ -50,17 +50,63 @@ function Write-State($State) {
     $State | ConvertTo-Json -Depth 5 | Set-Content $StatePath -Encoding UTF8
 }
 
+function Invoke-HostsFileWrite {
+    param(
+        [Parameter(Mandatory=$true)][scriptblock]$Operation,
+        [Parameter(Mandatory=$true)][string]$Description,
+        [int]$MaxAttempts = 40,
+        [int]$DelayMs = 250
+    )
+
+    $lastError = $null
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        try {
+            & $Operation
+            if ($attempt -gt 1) {
+                Info "PASS: hosts file became writable after $attempt attempts ($Description)."
+            }
+            return
+        } catch [System.IO.IOException] {
+            $lastError = $_.Exception.Message
+            if ($attempt -lt $MaxAttempts) {
+                Start-Sleep -Milliseconds $DelayMs
+                continue
+            }
+        }
+    }
+
+    Write-Host ''
+    Write-Host "STOP [HOSTS_WRITE_LOCKED]: Windows kept the hosts file locked while trying to $Description. $lastError" -ForegroundColor Red
+    exit 1
+}
+
 function Remove-HostsBlock {
     if (-not (Test-Path $HostsPath)) { return }
     $lines = @(Get-Content $HostsPath)
     $output = New-Object Collections.Generic.List[string]
     $inside = $false
+    $foundManagedBlock = $false
     foreach ($line in $lines) {
-        if ($line.TrimEnd() -eq $StartMarker) { $inside = $true; continue }
-        if ($line.TrimEnd() -eq $EndMarker) { $inside = $false; continue }
+        if ($line.TrimEnd() -eq $StartMarker) {
+            $foundManagedBlock = $true
+            $inside = $true
+            continue
+        }
+        if ($line.TrimEnd() -eq $EndMarker) {
+            $foundManagedBlock = $true
+            $inside = $false
+            continue
+        }
         if (-not $inside) { $output.Add($line) }
     }
-    Set-Content $HostsPath -Value $output -Encoding ASCII
+
+    # A clean machine has no appliance block. Do not rewrite the entire hosts file
+    # just to produce identical content; that unnecessary write caused the observed
+    # transient sharing violation on IANPC.
+    if (-not $foundManagedBlock) { return }
+
+    $write = { Set-Content -LiteralPath $HostsPath -Value $output -Encoding ASCII -ErrorAction Stop }.GetNewClosure()
+    Invoke-HostsFileWrite -Operation $write -Description 'remove the previous FIFA 15 routing block'
     ipconfig /flushdns | Out-Null
 }
 
@@ -71,7 +117,8 @@ function Set-HostsBlock([string]$HostIp) {
     foreach ($name in $RelayHostnames) { $lines.Add("$HostIp`t$name") }
     $lines.Add("127.0.0.1`tpeach.online.ea.com")
     $lines.Add($EndMarker)
-    Add-Content $HostsPath -Value $lines -Encoding ASCII
+    $write = { Add-Content -LiteralPath $HostsPath -Value $lines -Encoding ASCII -ErrorAction Stop }.GetNewClosure()
+    Invoke-HostsFileWrite -Operation $write -Description 'install the temporary FIFA 15 routing block'
     ipconfig /flushdns | Out-Null
 }
 
