@@ -14,13 +14,14 @@ $HostsPath = Join-Path $env:WINDIR 'System32\drivers\etc\hosts'
 $StartMarker = '# BEGIN FIFA15-TWO-PC-APPLIANCE'
 $EndMarker = '# END FIFA15-TWO-PC-APPLIANCE'
 $ReadyPort = 48215
-$PackageRevision = 'hardening-v3'
+$PackageRevision = 'hardening-v4'
 $RelayHostnames = @()
 $PatchPreimageSha256 = $null
 
 function Info([string]$Text) { Write-Host "  $Text" -ForegroundColor Gray }
 function Step([string]$Text) { Write-Host "`n>> $Text" -ForegroundColor Cyan }
 function Fail([string]$Text) { Write-Host "`nSTOP: $Text" -ForegroundColor Red; exit 1 }
+function Fail-Code([string]$Code, [string]$Text) { Write-Host "`nSTOP [$Code]: $Text" -ForegroundColor Red; exit 1 }
 
 function Ensure-Elevated {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -100,9 +101,6 @@ function Remove-HostsBlock {
         if (-not $inside) { $output.Add($line) }
     }
 
-    # A clean machine has no appliance block. Do not rewrite the entire hosts file
-    # just to produce identical content; that unnecessary write caused the observed
-    # transient sharing violation on IANPC.
     if (-not $foundManagedBlock) { return }
 
     $write = { Set-Content -LiteralPath $HostsPath -Value $output -Encoding ASCII -ErrorAction Stop }.GetNewClosure()
@@ -185,6 +183,13 @@ function Assert-SupportedWindowsArchitecture {
 }
 
 function Invoke-PackageSelfTest {
+    foreach ($path in @($PSCommandPath)) {
+        $tokens = $null
+        $errors = $null
+        [Management.Automation.Language.Parser]::ParseFile($path,[ref]$tokens,[ref]$errors) | Out-Null
+        if ($errors -and $errors.Count -gt 0) { Fail "PowerShell parse failed: $((@($errors | ForEach-Object Message)) -join '; ')" }
+    }
+
     Step 'Preflight: validating the tester package'
     foreach ($name in @(
         'APPLIANCE-CONFIG.json',
@@ -217,13 +222,18 @@ function Invoke-PackageSelfTest {
     Assert-BinaryIntegrity 'ca_modulus_1024.bin'
     Assert-BinaryIntegrity 'tailscale-amd64.msi' -Optional
 
+    $source = Get-Content -LiteralPath $PSCommandPath -Raw
+    if ($source -notmatch 'Wait-FifaProcessWithModule') { Fail 'FIFA process/module readiness helper is missing.' }
+    if ($source -match 'ProcessName\.Equals') { Fail 'Unsafe ProcessName.Equals null dereference is still present.' }
+    if ($source -notmatch 'FIFA_MODULE_NOT_READY') { Fail 'Named FIFA module-readiness failure is missing.' }
+
     $lsxScript = Join-Path $Root 'portable-lsx-responder.ps1'
     $table = Join-Path $Root 'lsx-table.json'
     $selfTestOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $lsxScript -TablePath $table -SelfTest 2>&1)
     if ($LASTEXITCODE -ne 0) {
         Fail "Bundled LSX responder self-test failed: $($selfTestOutput -join ' ')"
     }
-    Info 'PASS: package files, JSON, binary assets, and LSX responder self-test.'
+    Info 'PASS: package files, JSON, launch null-safety guards, binary assets, and LSX responder self-test.'
 }
 
 function Test-TcpPort([string]$HostIp, [int]$Port, [int]$TimeoutMs = 2500) {
@@ -518,6 +528,73 @@ function Get-BytesSha256([byte[]]$Bytes) {
     try { return ([BitConverter]::ToString($sha.ComputeHash($Bytes))).Replace('-','') } finally { $sha.Dispose() }
 }
 
+function Wait-FifaProcessWithModule($Launch) {
+    $deadline = (Get-Date).AddSeconds(30)
+    $sawFifa = $false
+    $lastDetail = $null
+    $launchPid = if ($Launch) { [int]$Launch.Id } else { 0 }
+
+    do {
+        Start-Sleep -Milliseconds 100
+        $candidates = @()
+
+        if ($launchPid -gt 0) {
+            $byPid = Get-Process -Id $launchPid -ErrorAction SilentlyContinue
+            if ($byPid) { $candidates += $byPid }
+        }
+
+        foreach ($candidate in @(Get-Process -Name fifa15 -ErrorAction SilentlyContinue)) {
+            if (-not $candidate) { continue }
+            if (@($candidates | Where-Object { $_.Id -eq $candidate.Id }).Count -eq 0) {
+                $candidates += $candidate
+            }
+        }
+
+        foreach ($candidate in $candidates) {
+            if (-not $candidate) { continue }
+            $name = [string]$candidate.ProcessName
+            if (-not [string]::Equals($name, 'fifa15', [StringComparison]::OrdinalIgnoreCase)) { continue }
+            $sawFifa = $true
+
+            try { $candidate.Refresh() } catch {
+                $lastDetail = "PID $($candidate.Id) could not be refreshed: $($_.Exception.Message)"
+                continue
+            }
+            if ($candidate.HasExited) {
+                $lastDetail = "PID $($candidate.Id) exited before its main module became ready."
+                continue
+            }
+
+            $mainModule = $null
+            try { $mainModule = $candidate.MainModule } catch {
+                $lastDetail = "PID $($candidate.Id) main module is not inspectable yet: $($_.Exception.Message)"
+                continue
+            }
+            if (-not $mainModule) {
+                $lastDetail = "PID $($candidate.Id) exists but MainModule is still null."
+                continue
+            }
+            if ($mainModule.BaseAddress -eq [IntPtr]::Zero -or $mainModule.ModuleMemorySize -le 0) {
+                $lastDetail = "PID $($candidate.Id) main module exists but its base/size is not ready."
+                continue
+            }
+
+            $modulePath = $null
+            try { $modulePath = [string]$mainModule.FileName } catch {}
+            if ($launchPid -gt 0 -and $candidate.Id -ne $launchPid) {
+                Info "FIFA process handoff detected: launcher PID $launchPid -> fifa15 PID $($candidate.Id)."
+            }
+            Info ("Attached to fifa15 PID {0}; module base=0x{1:X}; imageSize=0x{2:X}; path={3}" -f $candidate.Id,$mainModule.BaseAddress.ToInt64(),$mainModule.ModuleMemorySize,$modulePath)
+            return [pscustomobject]@{ Process = $candidate; MainModule = $mainModule }
+        }
+    } until ((Get-Date) -gt $deadline)
+
+    if ($sawFifa) {
+        Fail-Code 'FIFA_MODULE_NOT_READY' "A fifa15.exe process appeared, but its main module never became safely inspectable within 30 seconds. $lastDetail"
+    }
+    Fail-Code 'FIFA_PROCESS_NOT_FOUND' 'The selected fifa15.exe was started, but no fifa15 process appeared within 30 seconds.'
+}
+
 function Launch-AndPatchFifa([string]$Exe) {
     Step 'Launching FIFA 15 and applying the relay certificate patch'
     $stale = @(Get-Process fifa15 -ErrorAction SilentlyContinue)
@@ -527,36 +604,37 @@ function Launch-AndPatchFifa([string]$Exe) {
     Assert-BinaryIntegrity 'ca_modulus_1024.bin'
     $bytes = [IO.File]::ReadAllBytes($modulus)
 
-    $launch = Start-Process $Exe -WorkingDirectory (Split-Path -Parent $Exe) -PassThru
-    $deadline = (Get-Date).AddSeconds(30)
-    $process = $null
-    do {
-        Start-Sleep -Milliseconds 50
-        $process = Get-Process -Id $launch.Id -ErrorAction SilentlyContinue
-    } until ($process -or $launch.HasExited -or (Get-Date) -gt $deadline)
-    if (-not $process -or -not $process.ProcessName.Equals('fifa15', [StringComparison]::OrdinalIgnoreCase)) {
-        Fail 'The launched FIFA 15 process did not remain running long enough to patch.'
+    $launch = $null
+    try {
+        $launch = Start-Process $Exe -WorkingDirectory (Split-Path -Parent $Exe) -PassThru -ErrorAction Stop
+    } catch {
+        Fail-Code 'FIFA_START_FAILED' "Windows could not start the selected fifa15.exe: $($_.Exception.Message)"
     }
+    if (-not $launch) { Fail-Code 'FIFA_START_FAILED' 'Windows returned no process object for the selected fifa15.exe.' }
+    Info "Start-Process returned PID $($launch.Id); waiting for a stable fifa15 process and main module."
 
-    Start-Sleep -Milliseconds 500
-    try { $mainModule = $process.MainModule } catch {
-        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-        Fail 'Could not inspect the launched FIFA 15 main module.'
+    $attached = Wait-FifaProcessWithModule $launch
+    if (-not $attached -or -not $attached.Process -or -not $attached.MainModule) {
+        Fail-Code 'FIFA_MODULE_NOT_READY' 'FIFA process attachment returned incomplete process/module state.'
     }
+    $process = $attached.Process
+    $mainModule = $attached.MainModule
+
     $expectedBase = [Convert]::ToInt64('140000000',16)
     $addressValue = [Convert]::ToInt64('141E1F1A0',16)
     $baseValue = $mainModule.BaseAddress.ToInt64()
-    $endValue = $baseValue + [int64]$mainModule.ModuleMemorySize
+    $imageSize = [int64]$mainModule.ModuleMemorySize
+    $endValue = $baseValue + $imageSize
     if ($baseValue -ne $expectedBase -or $addressValue -lt $baseValue -or ($addressValue + 128) -gt $endValue) {
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-        Fail ("This FIFA build/runtime does not map the known certificate patch location safely (base=0x{0:X}, imageEnd=0x{1:X}). No memory was modified." -f $baseValue,$endValue)
+        Fail-Code 'CERTIFICATE_LAYOUT_DIFFERENT' ("This FIFA build/runtime does not map the known certificate patch location safely (base=0x{0:X}, imageEnd=0x{1:X}). No memory was modified." -f $baseValue,$endValue)
     }
 
     Ensure-PatchType
     $handle = [Fifa15Native]::OpenProcess(0x1438, $false, [uint32]$process.Id)
     if ($handle -eq [IntPtr]::Zero) {
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-        Fail 'Windows refused access to inspect/patch FIFA 15 memory.'
+        Fail-Code 'CERTIFICATE_PROCESS_ACCESS_FAILED' 'Windows refused access to inspect/patch FIFA 15 memory.'
     }
     try {
         $address = New-Object IntPtr $addressValue
