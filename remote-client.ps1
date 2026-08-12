@@ -224,7 +224,7 @@ function Invoke-PackageSelfTest {
 
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
     if ($source -notmatch 'Wait-FifaProcessWithModule') { Fail 'FIFA process/module readiness helper is missing.' }
-    if ($source -match 'ProcessName\.Equals') { Fail 'Unsafe ProcessName.Equals null dereference is still present.' }
+    if ($source -match '\$[A-Za-z_][A-Za-z0-9_]*\.ProcessName\.Equals\(') { Fail 'Unsafe instance process-name equality call is still present.' }
     if ($source -notmatch 'FIFA_MODULE_NOT_READY') { Fail 'Named FIFA module-readiness failure is missing.' }
 
     $lsxScript = Join-Path $Root 'portable-lsx-responder.ps1'
