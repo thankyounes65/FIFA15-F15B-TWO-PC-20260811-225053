@@ -9,7 +9,7 @@ $Root = Split-Path -Parent $PSCommandPath
 $SafeRun = Join-Path $Root 'safe-run.ps1'
 $JoinKey = Join-Path $Root 'JOIN.key'
 $HeldKey = Join-Path $Root 'JOIN.key.not-used-with-existing-tailscale'
-$EaGuardRevision = 'ea-state-v2'
+$EaGuardRevision = 'startup-evidence-v3'
 
 function Find-Tailscale {
     foreach ($path in @("$env:ProgramFiles\Tailscale\tailscale.exe", "$env:ProgramFiles(x86)\Tailscale\tailscale.exe")) {
@@ -40,6 +40,81 @@ function Start-KnownGoodEaCompatibilityGuard {
     return Start-Job -ArgumentList $Root,$EaGuardRevision -ScriptBlock {
         param([string]$PackageRoot,[string]$Revision)
         $ErrorActionPreference = 'Continue'
+
+        function Emit-EaEnvironment([string]$Phase) {
+            $eaNames = @(
+                'EADesktop.exe','EABackgroundService.exe','EALocalHostSvc.exe',
+                'EALauncher.exe','EALaunchHelper.exe','EAConnect_microsoft.exe',
+                'EACefSubProcess.exe','IGOProxy32.exe','IGOProxy64.exe','ActivationUI.exe'
+            )
+            $rows = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -in $eaNames } |
+                Sort-Object Name,ProcessId)
+            $cefCount = @($rows | Where-Object { $_.Name -eq 'EACefSubProcess.exe' }).Count
+            $localHostCount = @($rows | Where-Object { $_.Name -eq 'EALocalHostSvc.exe' }).Count
+            $igoCount = @($rows | Where-Object { $_.Name -in @('IGOProxy32.exe','IGOProxy64.exe') }).Count
+            Write-Output "EA_ENV phase=$Phase total=$($rows.Count) cef=$cefCount localhost=$localHostCount igo=$igoCount"
+            foreach ($row in $rows) {
+                $path = if ($row.ExecutablePath) { [string]$row.ExecutablePath } else { '<unknown>' }
+                $cmd = if ($row.CommandLine) { ([string]$row.CommandLine -replace '[\r\n]+',' ') } else { '<unknown>' }
+                if ($cmd.Length -gt 300) { $cmd = $cmd.Substring(0,300) + '...' }
+                Write-Output "EA_PROCESS phase=$Phase name=$($row.Name) pid=$($row.ProcessId) parent=$($row.ParentProcessId) path=$path cmd=$cmd"
+            }
+            $desktop = $rows | Where-Object { $_.Name -eq 'EADesktop.exe' -and $_.ExecutablePath } | Select-Object -First 1
+            if ($desktop -and (Test-Path -LiteralPath $desktop.ExecutablePath -PathType Leaf)) {
+                try {
+                    $vi = (Get-Item -LiteralPath $desktop.ExecutablePath).VersionInfo
+                    Write-Output "EA_DESKTOP_VERSION phase=$Phase file=$($vi.FileVersion) product=$($vi.ProductVersion)"
+                } catch {}
+            }
+        }
+
+        function Emit-StartupFileFingerprint([string]$GameDir) {
+            if (-not $GameDir -or -not (Test-Path -LiteralPath $GameDir -PathType Container)) {
+                Write-Output 'FILE_FINGERPRINT unavailable: game directory could not be resolved.'
+                return
+            }
+            Write-Output "FILE_FINGERPRINT_BEGIN game_dir=$GameDir"
+            $referenceHashes = @{
+                'bcenginezf.dll'='009E8936E4E79499E189FE4A4E821B283FF8E830BE697F5E55873677BB4C3B01'
+                'd3dcompiler_46.dll'='9614DE7BAC24091E2ABAF70B3C852DDF9B92A48157C557C3C63D81D88D4D5CEB'
+                'dbdata.dll'='FDDB8D45464CEF3FF089609DC71342D347AF62A36FB1E4AE8A75FBCA33DF88BF'
+                'itsame_origin.dll'='5B141FB03C6F50228E48DDAF8DFB49428194A1F01BE1A63C826C5BCE4DEC487A'
+                'originsetup.exe'='EC0765A1F39E55A39E378150270F39E90C93ADEE59272B947011232C3CED524D'
+                'winui.dll'='B4B1935EE76F434685F0515B0E5DFC18ADFD2DAEAE50F32EF85EC6FFAAADE63C'
+            }
+            $names = @(
+                'BCEnginezf.dll','buttonData.ini','buttonDataKeyBoardMouse.ini','buttonDataXenon.ini',
+                'CardsDLLzf.dll','CPY.ini','d3dcompiler_46.dll','dbdata.dll','fifa15.par','install.ini',
+                'ItsAMe_Origin.dll','memoryfw.ini','memoryfw_postboot.ini','OriginSetup.exe','OriginSetup.ini',
+                'sysdllzf.dll','winui.dll'
+            )
+            foreach ($name in $names) {
+                $path = Join-Path $GameDir $name
+                if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                    Write-Output "FILE_FINGERPRINT name=$name status=MISSING"
+                    continue
+                }
+                try {
+                    $item = Get-Item -LiteralPath $path
+                    $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+                    $key = $name.ToLowerInvariant()
+                    $reference = if ($referenceHashes.ContainsKey($key)) { $referenceHashes[$key] } else { $null }
+                    $compare = if ($reference) {
+                        if ($hash.Equals($reference,[StringComparison]::OrdinalIgnoreCase)) { 'MATCH_KNOWN_WORKING' } else { 'DIFF_KNOWN_WORKING' }
+                    } elseif ($key -eq 'sysdllzf.dll') {
+                        if ($hash -eq 'AE283399CA945FE910F819D61101A527A744753F6E0C46406C324C8721EE63F5') { 'KNOWN_WORKING_LOGGING_ENABLED' }
+                        elseif ($hash -eq 'B477BACB277F43A9C93C4E4D8B47E1F0F8B6B2E9751A218448B8D1B17A5DCF87') { 'KNOWN_ORIGINAL_LOGGING_DISABLED' }
+                        else { 'UNKNOWN_VARIANT' }
+                    } else { 'NO_REFERENCE_HASH_YET' }
+                    Write-Output "FILE_FINGERPRINT name=$name bytes=$($item.Length) sha256=$hash compare=$compare"
+                } catch {
+                    Write-Output "FILE_FINGERPRINT name=$name status=READ_ERROR error=$($_.Exception.Message)"
+                }
+            }
+            Write-Output 'FILE_FINGERPRINT_END'
+        }
+
         Write-Output "EA_COMPAT_GUARD_READY revision=$Revision package_root=$PackageRoot"
         Write-Output 'EA_COMPAT_GUARD: waiting for package LSX ownership of 127.0.0.1:3216.'
 
@@ -88,6 +163,7 @@ function Start-KnownGoodEaCompatibilityGuard {
             return
         }
         Write-Output "EA_COMPAT_GUARD: PASS EABackgroundService running while package LSX still owns 3216 pid=$lsxOwner."
+        Emit-EaEnvironment 'pre-fifa'
 
         $fifa = $null
         $fifaDeadline = (Get-Date).AddSeconds(45)
@@ -101,24 +177,54 @@ function Start-KnownGoodEaCompatibilityGuard {
         }
 
         $pidValue = [int]$fifa.Id
-        Write-Output "EA_COMPAT_GUARD: observed fifa15 pid=$pidValue; sampling early companion-module state."
+        $fifaCim = Get-CimInstance Win32_Process -Filter "ProcessId=$pidValue" -ErrorAction SilentlyContinue
+        $gameDir = $null
+        if ($fifaCim -and $fifaCim.ExecutablePath) { $gameDir = Split-Path -Parent ([string]$fifaCim.ExecutablePath) }
+        $parentPid = if ($fifaCim) { [int]$fifaCim.ParentProcessId } else { 0 }
+        $parent = if ($parentPid -gt 0) { Get-CimInstance Win32_Process -Filter "ProcessId=$parentPid" -ErrorAction SilentlyContinue } else { $null }
+        $parentName = if ($parent) { [string]$parent.Name } else { '<unknown>' }
+        $parentPath = if ($parent -and $parent.ExecutablePath) { [string]$parent.ExecutablePath } else { '<unknown>' }
+        Write-Output "STARTUP_CONTEXT fifa_pid=$pidValue parent_pid=$parentPid parent_name=$parentName parent_path=$parentPath game_dir=$gameDir"
+        Emit-EaEnvironment 'fifa-observed'
+        Write-Output "EA_COMPAT_GUARD: observed fifa15 pid=$pidValue; sampling early modules and sockets."
+
+        $seenConnections = @{}
         $lastMs = 0
-        foreach ($sampleMs in @(0,50,100,250,500,1000)) {
+        foreach ($sampleMs in @(0,25,50,75,100,125,150,175,200,225,250,500,1000)) {
             if ($sampleMs -gt $lastMs) { Start-Sleep -Milliseconds ($sampleMs - $lastMs) }
             $lastMs = $sampleMs
             $procNow = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
             $alive = [bool]$procNow
             $modules = @()
-            if ($procNow) {
+            if ($procNow -and $sampleMs -in @(0,50,100,250,500,1000)) {
                 try {
                     $modules = @($procNow.Modules | Where-Object { $_.ModuleName -in @('ItsAMe_Origin.dll','sysdllzf.dll') } | ForEach-Object { $_.ModuleName })
                 } catch {}
             }
+            if ($procNow) {
+                foreach ($conn in @(Get-NetTCPConnection -OwningProcess $pidValue -ErrorAction SilentlyContinue)) {
+                    $key = "$($conn.LocalAddress):$($conn.LocalPort)->$($conn.RemoteAddress):$($conn.RemotePort):$($conn.State)"
+                    if (-not $seenConnections.ContainsKey($key)) {
+                        $seenConnections[$key] = $true
+                        $kind = if ($conn.RemotePort -eq 3216 -or $conn.LocalPort -eq 3216) { 'LSX_TOUCH' }
+                            elseif ($conn.RemotePort -in @(42127,42230,42128,17502,17503)) { 'RELAY_TOUCH' }
+                            else { 'OTHER_TCP' }
+                        Write-Output "STARTUP_TCP kind=$kind t=${sampleMs}ms $key"
+                    }
+                }
+            }
             $serviceNow = Get-Service -Name EABackgroundService -ErrorAction SilentlyContinue
             $serviceStatus = if ($serviceNow) { [string]$serviceNow.Status } else { '<missing>' }
-            Write-Output "EA_COMPAT sample t=${sampleMs}ms alive=$alive service=$serviceStatus modules=$($modules -join ',')"
+            if ($sampleMs -in @(0,50,100,250,500,1000)) {
+                Write-Output "EA_COMPAT sample t=${sampleMs}ms alive=$alive service=$serviceStatus modules=$($modules -join ',')"
+            }
             if (-not $alive) { break }
         }
+
+        $lsxTouch = @($seenConnections.Keys | Where-Object { $_ -match ':3216' }).Count -gt 0
+        $relayTouch = @($seenConnections.Keys | Where-Object { $_ -match ':(42127|42230|42128|17502|17503):' }).Count -gt 0
+        Write-Output "STARTUP_EVIDENCE_SUMMARY fifa_pid=$pidValue lsx_touch=$lsxTouch relay_touch=$relayTouch connection_count=$($seenConnections.Count)"
+        Emit-StartupFileFingerprint $gameDir
     }
 }
 
@@ -142,7 +248,7 @@ function Wait-EaCompatibilityGuardReady($Job) {
 function Stop-AndReportEaCompatibilityGuard($Job) {
     if (-not $Job) { return }
     try {
-        Wait-Job -Job $Job -Timeout 2 | Out-Null
+        Wait-Job -Job $Job -Timeout 10 | Out-Null
         Receive-Job -Job $Job -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
     } finally {
         Stop-Job -Job $Job -ErrorAction SilentlyContinue | Out-Null
@@ -163,13 +269,17 @@ if ($SelfTest) {
         exit 1
     }
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
-    foreach ($marker in @('Start-KnownGoodEaCompatibilityGuard','Wait-EaCompatibilityGuardReady','EA_COMPAT_GUARD_READY','EABackgroundService','portable-lsx-responder','EA_COMPAT sample t=')) {
-        if ($source -notmatch $marker) {
-            Write-Host "SELF-TEST FAILED: missing EA compatibility guard marker: $marker" -ForegroundColor Red
+    foreach ($marker in @(
+        'Start-KnownGoodEaCompatibilityGuard','Wait-EaCompatibilityGuardReady','EA_COMPAT_GUARD_READY',
+        'EABackgroundService','portable-lsx-responder','EA_ENV phase=','STARTUP_CONTEXT','STARTUP_TCP',
+        'STARTUP_EVIDENCE_SUMMARY','FILE_FINGERPRINT_BEGIN','CPY.ini'
+    )) {
+        if ($source -notmatch [regex]::Escape($marker)) {
+            Write-Host "SELF-TEST FAILED: missing startup-evidence marker: $marker" -ForegroundColor Red
             exit 1
         }
     }
-    Write-Host 'PASS: launch guard parses; existing Tailscale cannot consume JOIN.key; known-good EA guard must prove it is actively watching before the safe runner; emergency cleanup always reaches the machine restore.' -ForegroundColor Green
+    Write-Host 'PASS: launch guard parses; known-good EA state is preserved; passive EA/process/socket/game-file evidence is armed before FIFA; emergency cleanup still reaches exact restore.' -ForegroundColor Green
     exit 0
 }
 
@@ -206,7 +316,7 @@ try {
         Write-Host '  Existing Tailscale connection detected; JOIN.key is quarantined for this run and cannot switch accounts/tailnets.' -ForegroundColor Gray
     }
 
-    Write-Host "  EA compatibility guard arming ($EaGuardRevision): it will start EABackgroundService only after package LSX owns 3216." -ForegroundColor Gray
+    Write-Host "  Startup evidence guard arming ($EaGuardRevision): runtime behavior is unchanged; it will observe EA readiness, FIFA sockets and file fingerprints." -ForegroundColor Gray
     $eaGuard = Start-KnownGoodEaCompatibilityGuard
     Wait-EaCompatibilityGuardReady $eaGuard
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $SafeRun | Out-Host
