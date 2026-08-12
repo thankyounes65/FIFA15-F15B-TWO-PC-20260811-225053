@@ -100,14 +100,15 @@ if ($SelfTest) {
 $hostIp = Read-HostIp
 $tailscale = Find-Tailscale
 if (-not $tailscale) {
-    Info 'Tailscale is not installed. The main launcher may install it and use the private JOIN.key path.'
-    exit 0
+    Fail 'TAILSCALE_NOT_INSTALLED' 'Tailscale is not installed. Install Tailscale, sign into YOUR OWN Tailscale account, accept the machine-share invite for thankyounes host, then rerun RUN-FIFA15-F15B.bat. Do not use thankyounes login and do not use a JOIN.key from this public repo.'
 }
 
 $ipResult = Invoke-TailscaleCli -Exe $tailscale -Arguments @('ip','-4')
 $localIp = @($ipResult.Stdout -split "`r?`n" | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1)
 if ($localIp.Count -eq 0 -or -not $localIp[0]) {
-    Fail 'TAILSCALE_NOT_CONNECTED' 'Tailscale is already installed but is not connected. Do not sign into thankyounes account. Connect your own Tailscale account first, then accept the shared-machine invite and rerun this BAT.'
+    $detail = (($ipResult.Stderr + ' ' + $ipResult.Stdout).Trim())
+    if (-not $detail) { $detail = 'Tailscale reported no current IPv4 address.' }
+    Fail 'TAILSCALE_NOT_CONNECTED' "Tailscale is installed but is not connected. Stay on YOUR OWN Tailscale account, connect it normally, accept the shared-machine invite for thankyounes host, and rerun this BAT. Detail: $detail"
 }
 $localIp = $localIp[0].Trim()
 Info "Existing Tailscale connection: $localIp"
@@ -115,11 +116,11 @@ Info "Existing Tailscale connection: $localIp"
 $statusResult = Invoke-TailscaleCli -Exe $tailscale -Arguments @('status')
 if ($statusResult.ExitCode -ne 0) {
     $detail = (($statusResult.Stderr + ' ' + $statusResult.Stdout).Trim())
-    Fail 'TAILSCALE_STATUS_FAILED' "Could not inspect the existing Tailscale peer list. $detail"
+    Fail 'TAILSCALE_STATUS_FAILED' "Could not inspect this PC's Tailscale peer list. $detail"
 }
 
 if (-not (Test-StatusContainsHost -StatusText $statusResult.Stdout -HostIp $hostIp)) {
-    Fail 'TAILSCALE_HOST_NOT_SHARED' "This PC is connected to its own Tailscale account, but thankyounes host $hostIp is not visible in 'tailscale status'. Stay signed into your own account. Accept the Tailscale machine-share invite for thankyounes host, then rerun RUN-FIFA15-F15B.bat. No network settings were changed."
+    Fail 'TAILSCALE_HOST_NOT_SHARED' "This PC is connected to Tailscale, but thankyounes host $hostIp is not visible in 'tailscale status'. Stay signed into YOUR OWN account. Accept the machine-share invite for thankyounes host, then rerun RUN-FIFA15-F15B.bat. No network settings were changed."
 }
 Pass "thankyounes host $hostIp is visible in this PC's Tailscale peer list."
 
@@ -129,8 +130,8 @@ if ($pingResult.ExitCode -eq 0) {
     if ($line.Count -gt 0) { Pass "Tailscale tunnel reached host: $($line[0].Trim())" }
     else { Pass 'Tailscale tunnel reached the shared host.' }
 } else {
-    Write-Host '  WARNING: the host is shared/visible but a Tailscale ping did not complete yet.' -ForegroundColor Yellow
-    Write-Host '  The launcher will still wait for the host readiness beacon; this can be normal if the host PC is still coming online.' -ForegroundColor Yellow
+    Write-Host '  WARNING: the shared host is visible but a Tailscale ping did not complete yet.' -ForegroundColor Yellow
+    Write-Host '  This is allowed here because the host readiness beacon may still be coming online; the main launcher will wait for it.' -ForegroundColor Yellow
 }
 
 exit 0
