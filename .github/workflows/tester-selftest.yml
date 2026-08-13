@@ -23,7 +23,8 @@ jobs:
             '.\PLAYER-B-BOOT-AND-CONNECT.md',
             '.\PLAYER-B-KNOWN-GOOD.json',
             '.\VERIFY-PLAYER-B-GAME-FILES.ps1',
-            '.\VERIFY-PLAYER-B-GAME-FILES.bat'
+            '.\VERIFY-PLAYER-B-GAME-FILES.bat',
+            '.\collect-evidence.ps1'
           )) {
             if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "missing Player B reconstruction file: $required" }
           }
@@ -43,6 +44,8 @@ jobs:
           if ($bat -notmatch 'tailscale-bootstrap\.ps1') { throw 'RUN BAT must bootstrap missing Tailscale' }
           if ($bat -notmatch 'loopback-relay-forwarder\.ps1.*-Start') { throw 'RUN BAT must start the remote QoS/FUT loopback forwarder' }
           if ($bat -notmatch 'diagnostic-run\.ps1') { throw 'RUN BAT must enter through diagnostic-run.ps1' }
+          if ($bat -notmatch 'collect-evidence\.ps1') { throw 'RUN BAT must create the one-file Player B evidence bundle' }
+          if ($bat -notmatch 'FIFA15-F15B-EVIDENCE-') { throw 'RUN BAT must tell Player B to send the evidence ZIP' }
 
           .\VERIFY-PLAYER-B-GAME-FILES.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -62,6 +65,8 @@ jobs:
             .\loopback-relay-forwarder.ps1 -Stop
           }
           .\diagnostic-run.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\collect-evidence.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\launch-safe.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
