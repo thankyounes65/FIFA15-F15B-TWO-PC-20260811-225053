@@ -1,18 +1,18 @@
-# Player B runtime test — identity/session v4
+# Player B runtime test — post-mesh GSU v5
 
 ## Pair
-- Player A: `thankyounes65/fifa15-relay-clean` -> `integration/test-matchmaking-identity-session-coherence-v10`
-- Player B: `integration/test-matchmaking-b-identity-session-v4`
+- Player A: `thankyounes65/fifa15-relay-clean` -> `integration/test-matchmaking-postmesh-gsu-v10`
+- Player B: `integration/test-matchmaking-b-postmesh-gsu-v5`
 
 ## Purpose
-Validate FUT Online Single Match end-to-end against the host v10 GameManager PlayerID and GameSessionUpdated ordering correction.
+Validate FUT Online Single Match end-to-end against the host v10 Finalize-conditioned post-mesh `GameSessionUpdated` ordering correction.
 
-The v9 run proved A no longer crashes, raw UDP/3659 is strongly bidirectional, and B can still remain on the loading screen. Host v10 therefore fixes the two concrete above-transport defects from that run: one coherent GameManager PlayerID namespace and deferring the host's peer GameSessionUpdated until B is genuinely ACTIVE_CONNECTED from client-reported mesh state.
+The v9 run proved A no longer crashes, raw UDP/3659 is strongly bidirectional, and B can still remain on the loading screen. The concrete ordering defect is that B received the copied `GameSessionUpdated` while still connecting and only afterward received its real mesh-driven `STAT=4`/ACTIVE_CONNECTED promotion. Host v10 preserves the observed GID-only/empty-XNet session shape and replays it once after real promotion when FIFA previously sent `FinalizeGameCreation`.
 
-Player B v4 is appliance/provenance only. It does not fabricate PlayerID or session data locally.
+Player B v5 is appliance/provenance only. It does not fabricate session, mesh, PlayerID, XNet, PRE_GAME, or demangler data locally. It also stops any stale passive network observer left by an earlier aborted run before arming a fresh observer.
 
 ## Safety
-V4 uses **no in-process FIFA instrumentation**. No Frida, Stalker, native GSU tracer, or native observer is attached. Historical native files may remain for archaeology, but the launcher does not start them and package preflight rejects activation.
+V5 uses **no in-process FIFA instrumentation**. No Frida, Stalker, native GSU tracer, or native observer is attached. Historical native files may remain for archaeology, but the launcher does not start them and package preflight rejects activation.
 
 ## Retained B behavior
 - Tailscale bootstrap and exact restoration;
@@ -39,4 +39,4 @@ V4 uses **no in-process FIFA instrumentation**. No Frida, Stalker, native GSU tr
 Both clients pair, both render the same pre-match lobby, ready/team progression succeeds, both enter the same live match, each controls its own team, and gameplay remains connected.
 
 ## Preflight failures that matter
-Wrong branch/package stamp, Tailscale failure, unreachable host demangler, failed forwarder, failed passive network observer, EA/LSX readiness failure, CA verification failure, or inability to reach Blaze are real prerequisites. Frida, native byte guards, retained dumps and Node are not v4 prerequisites.
+Wrong branch/package stamp, Tailscale failure, unreachable host demangler, failed forwarder, failed passive network observer, EA/LSX readiness failure, CA verification failure, or inability to reach Blaze are real prerequisites. Frida, native byte guards, retained dumps and Node are not v5 prerequisites.
