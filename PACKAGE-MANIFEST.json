@@ -1,8 +1,8 @@
 {
   "format": 3,
-  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503",
+  "package_revision": "ea-readiness-v1+loopback-forwarder-3658-17502-17503",
   "role": "f15b",
-  "note": "Proven physical Player B package: tester-owned Tailscale account + shared host; exact-state restoration; package LSX on 127.0.0.1:3216; full EA App readiness gate stable for 10 seconds; 500 ms direct CA write/readback; transparent loopback forwarding of only QoS 17502 and FUT REST 17503. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records their observed hashes/provenance.",
+  "note": "Proven physical Player B package plus matchmaking diagnostic extension: tester-owned Tailscale account + shared host; exact-state restoration; package LSX on 127.0.0.1:3216; full EA App readiness gate stable for 10 seconds; 500 ms direct CA write/readback; transparent loopback forwarding of DirtySDK ProtoMangle 3658, QoS 17502 and FUT REST 17503. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records their observed hashes/provenance.",
   "documentation_files": [
     "README-FIRST.txt",
     "PLAYER-B-BOOT-AND-CONNECT.md",
@@ -17,7 +17,8 @@
     "ea_readiness_gate": true,
     "ea_readiness_stability_seconds": 10,
     "lsx_local_port": 3216,
-    "loopback_forward_ports": [17502, 17503],
+    "loopback_forward_ports": [3658, 17502, 17503],
+    "demangler_host_port": 3658,
     "host_ready_port": 48215,
     "host_preflight_port": 42127
   },
