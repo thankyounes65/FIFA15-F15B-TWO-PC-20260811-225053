@@ -1,8 +1,10 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
-title FIFA 15 Remote Player - f15b - Post-Mesh GSU V5
+title FIFA 15 Remote Player - f15b - Promotion Notification V12
 
+set "EXPECTED_BRANCH=integration/test-matchmaking-b-promotion-notification-v12"
+set "EXPECTED_HOST_BRANCH=integration/test-matchmaking-promotion-notification-bundle-v12"
 set "PACKAGE_PREFLIGHT=%~dp0runtime-package-preflight.ps1"
 if not exist "%PACKAGE_PREFLIGHT%" (
   echo PLAYER B PREFLIGHT FAILED - MISSING RUNTIME PACKAGE PREFLIGHT.
@@ -20,7 +22,7 @@ if errorlevel 1 (
 )
 
 rem Previous diagnostic/runtime branches may leave either observer waiting. Stop
-rem them before FIFA exists. v5 never starts or self-tests the native observer.
+rem them before FIFA exists. v12 never starts or self-tests the native observer.
 if exist "%~dp0guest-native-gsu-observer.ps1" (
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-native-gsu-observer.ps1" -Stop >nul 2>&1
 )
@@ -31,10 +33,11 @@ if exist "%~dp0guest-network-observer.ps1" (
 
 echo.
 echo ============================================================
-echo   FIFA15 PLAYER B - POST-MESH GSU V5
+echo   FIFA15 PLAYER B - PROMOTION NOTIFICATION V12
 echo ============================================================
-echo   Paired host: integration/test-matchmaking-postmesh-gsu-v10
- echo   Match behavior: host v10 owns Finalize-conditioned post-mesh GSU replay.
+echo   Player B: %EXPECTED_BRANCH%
+echo   Paired host: %EXPECTED_HOST_BRANCH%
+echo   Host delta: ACTIVE_CONNECTED promotion JoinCompleted is bilateral.
 echo   Routing: retain proven Tailscale + ProtoMangle/QoS/FUT forwarders.
 echo   Crash isolation: NO Frida/Stalker/native observer is attached.
 echo   Passive LSX/Blaze/network observation remains enabled.
@@ -81,7 +84,7 @@ set "OBSSTARTRC=%ERRORLEVEL%"
 if not "%OBSSTARTRC%"=="0" goto :guest_preflight_failed
 
 echo.
-echo V5 crash guard active: native GSU/Frida observer is intentionally NOT started.
+echo V12 crash guard active: native GSU/Frida observer is intentionally NOT started.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0diagnostic-run.ps1"
 set "RC=%ERRORLEVEL%"
 
@@ -110,12 +113,8 @@ if not "%EVIDRC%"=="0" (
   echo Keep the newest FIFA15-F15B-DIAG, NETWORK and FORWARDER files from the Desktop.
 )
 
-if "%OBSRC%"=="41" (
-  echo PLAYER B PREREQUISITE FAILURE: FIFA never established required local LSX.
-)
-if "%OBSRC%"=="42" (
-  echo PLAYER B PREREQUISITE FAILURE: local LSX worked, but FIFA never established Blaze TCP 42128.
-)
+if "%OBSRC%"=="41" echo PLAYER B PREREQUISITE FAILURE: FIFA never established required local LSX.
+if "%OBSRC%"=="42" echo PLAYER B PREREQUISITE FAILURE: local LSX worked, but FIFA never established Blaze TCP 42128.
 
 if not "%RC%"=="0" (
   echo.
@@ -124,7 +123,7 @@ if not "%RC%"=="0" (
   pause
 ) else (
   echo.
-  echo Test finished against post-mesh GSU host v10 with passive network diagnostics only.
+  echo Test finished against promotion-notification host v12 with passive network diagnostics only.
   echo Send the newest FIFA15-F15B-EVIDENCE-*.zip from the Desktop.
 )
 exit /b %RC%
@@ -132,7 +131,7 @@ exit /b %RC%
 :guest_preflight_failed
 echo.
 echo PLAYER B PREFLIGHT FAILED - FIFA WAS NOT LAUNCHED.
-echo The mandatory demangler/network prerequisite failed above.
+echo The mandatory package/demangler/network prerequisite failed above.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Stop >nul 2>&1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1" -Cleanup
