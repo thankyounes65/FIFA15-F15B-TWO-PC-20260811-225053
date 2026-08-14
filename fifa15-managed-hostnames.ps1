@@ -12,10 +12,11 @@
 #
 # demangler.ea.com is DirtySDK ProtoMangle's production default. In this
 # two-machine runtime it follows the relay host address so Player B reaches the
-# host-side TCP/3658 ProtoMangle service. peach.online.ea.com is added separately
-# by remote-client.ps1 to the same host address because it is the DirtySDK
-# development/test demangler name and older package revisions intentionally kept
-# it role-specific.
+# host-side TCP/3658 ProtoMangle service directly. peach.online.ea.com is added
+# separately by remote-client.ps1 as 127.0.0.1 because older package revisions
+# intentionally kept the DirtySDK development/test demangler role-specific;
+# loopback-relay-forwarder.ps1 then carries that local TCP/3658 connection to
+# the same host-side ProtoMangle service.
 $Fifa15RedirectableHostnames = @(
     'gosredirector.ea.com',
     'gosredirector.online.ea.com',
