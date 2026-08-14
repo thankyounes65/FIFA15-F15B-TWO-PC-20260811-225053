@@ -1,7 +1,17 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
-title FIFA 15 Remote Player - f15b
+title FIFA 15 Remote Player - f15b - Native GSU Diagnostic
+
+for /f "delims=" %%H in ('git branch --show-current 2^>nul') do set "CURRENT_BRANCH=%%H"
+if /I not "%CURRENT_BRANCH%"=="integration/test-matchmaking-b-native-gsu-v1" (
+  echo.
+  echo PLAYER B PREFLIGHT FAILED - WRONG DIAGNOSTIC BRANCH.
+  echo Expected: integration/test-matchmaking-b-native-gsu-v1
+  echo Current:  %CURRENT_BRANCH%
+  pause
+  exit /b 43
+)
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1"
 set "BOOTRC=%ERRORLEVEL%"
@@ -36,12 +46,26 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-obse
 set "OBSSTARTRC=%ERRORLEVEL%"
 if not "%OBSSTARTRC%"=="0" goto :guest_preflight_failed
 
+echo.
+echo Verifying and arming the exact-byte-guarded Player B native GameSetup/JoinCompleted/GSU observer...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-native-gsu-observer.ps1" -SelfTest
+set "NATIVESELFRC=%ERRORLEVEL%"
+if not "%NATIVESELFRC%"=="0" goto :guest_preflight_failed
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-native-gsu-observer.ps1" -Start
+set "NATIVESTARTRC=%ERRORLEVEL%"
+if not "%NATIVESTARTRC%"=="0" goto :guest_preflight_failed
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0diagnostic-run.ps1"
 set "RC=%ERRORLEVEL%"
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Stop -AppendToNewestDiag
 set "OBSRC=%ERRORLEVEL%"
 if "%RC%"=="0" if not "%OBSRC%"=="0" set "RC=%OBSRC%"
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-native-gsu-observer.ps1" -Stop
+set "NATIVERC=%ERRORLEVEL%"
+if "%RC%"=="0" if not "%NATIVERC%"=="0" set "RC=%NATIVERC%"
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
 set "FWDSTOPRC=%ERRORLEVEL%"
@@ -57,12 +81,12 @@ if not "%CLEANRC%"=="0" (
 )
 
 echo.
-echo Collecting Player-B diagnostic, network, forwarder and crash evidence into one ZIP...
+echo Collecting Player-B diagnostic, network, native GSU, forwarder and crash evidence into one ZIP...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0collect-evidence.ps1"
 set "EVIDRC=%ERRORLEVEL%"
 if not "%EVIDRC%"=="0" (
   echo WARNING: automatic evidence bundling failed with error %EVIDRC%.
-  echo Keep the newest FIFA15-F15B-DIAG-*.txt, FIFA15-F15B-NETWORK-*.log and FIFA15-F15B-FORWARDER-*.log files on the Desktop.
+  echo Keep the newest FIFA15-F15B-DIAG-*.txt, FIFA15-F15B-NETWORK-*.log, FIFA15-F15B-NATIVE-GSU-* and FIFA15-F15B-FORWARDER-*.log files on the Desktop.
 )
 
 if "%OBSRC%"=="41" (
@@ -84,7 +108,7 @@ if not "%RC%"=="0" (
   pause
 ) else (
   echo.
-  echo Test finished with Player B LSX and Blaze connectivity both confirmed.
+  echo Test finished with Player B LSX/Blaze and native GSU diagnostics armed.
   echo Send the newest FIFA15-F15B-EVIDENCE-*.zip from your Desktop to thankyounes.
 )
 exit /b %RC%
@@ -92,7 +116,8 @@ exit /b %RC%
 :guest_preflight_failed
 echo.
 echo PLAYER B PREFLIGHT FAILED - FIFA WAS NOT LAUNCHED.
-echo The read-only LSX/Blaze network observer check failed above.
+echo The read-only network/native observer check failed above.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-native-gsu-observer.ps1" -Stop >nul 2>&1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Stop >nul 2>&1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1" -Cleanup
