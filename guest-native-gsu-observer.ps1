@@ -14,7 +14,7 @@ $KnownGood = Join-Path $Root 'PLAYER-B-KNOWN-GOOD.json'
 $PidFile = Join-Path $env:TEMP 'fifa15-f15b-native-gsu-tracer.pid'
 $StampFile = Join-Path $env:TEMP 'fifa15-f15b-native-gsu-tracer.stamp'
 $ExpectedFifaHash = '3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB'
-$ExpectedBranch = 'integration/test-matchmaking-b-native-gsu-v1'
+$ExpectedBranch = 'integration/test-matchmaking-b-demangler-native-v2'
 
 function Fail([string]$Text, [int]$Code = 1) {
     Write-Host "STOP [NATIVE_GSU_OBSERVER]: $Text" -ForegroundColor Red
