@@ -11,6 +11,7 @@ Set-StrictMode -Version 2
 $Root = Split-Path -Parent $PSCommandPath
 $Tracer = Join-Path $Root 'guest-native-gsu-trace.py'
 $KnownGood = Join-Path $Root 'PLAYER-B-KNOWN-GOOD.json'
+$RuntimePreflight = Join-Path $Root 'runtime-package-preflight.ps1'
 $PidFile = Join-Path $env:TEMP 'fifa15-f15b-native-gsu-tracer.pid'
 $StampFile = Join-Path $env:TEMP 'fifa15-f15b-native-gsu-tracer.stamp'
 $ExpectedFifaHash = '3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB'
@@ -35,13 +36,13 @@ function Assert-Frida([string]$Python) {
     }
 }
 
-function Assert-Branch {
-    $git = Get-Command git.exe -ErrorAction SilentlyContinue
-    if (-not $git) { $git = Get-Command git -ErrorAction SilentlyContinue }
-    if (-not $git) { Fail 'git is unavailable; cannot prove the Player B diagnostic branch.' 43 }
-    $branch = (& $git.Source -C $Root branch --show-current 2>$null | Select-Object -First 1)
-    if (-not $branch -or $branch.Trim() -ne $ExpectedBranch) {
-        Fail "wrong Player B branch. Expected $ExpectedBranch; found $branch" 43
+function Assert-RuntimePackage {
+    if (-not (Test-Path -LiteralPath $RuntimePreflight -PathType Leaf)) {
+        Fail "missing package provenance preflight: $RuntimePreflight" 43
+    }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RuntimePreflight -SelfTest | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        Fail 'Player B package/runtime provenance preflight failed.' 43
     }
 }
 
@@ -58,7 +59,7 @@ function Assert-KnownGoodContract {
 
 function Invoke-SelfTest {
     if (-not (Test-Path -LiteralPath $Tracer -PathType Leaf)) { Fail "missing native tracer: $Tracer" 43 }
-    Assert-Branch
+    Assert-RuntimePackage
     Assert-KnownGoodContract
     $python = Get-Python
     Assert-Frida $python
@@ -76,7 +77,7 @@ function Invoke-SelfTest {
     )) {
         if (-not $source.Contains($marker)) { Fail "native tracer lost required marker: $marker" 43 }
     }
-    Write-Host 'PASS: Player B native GSU observer is exact-branch, known-good-contract pinned, Python/Frida-ready, exact-byte guarded and bounded.' -ForegroundColor Green
+    Write-Host 'PASS: Player B native GSU observer is package-provenance pinned, known-good-contract pinned, Python/Frida-ready, exact-byte guarded and bounded.' -ForegroundColor Green
 }
 
 function Stop-Existing {
@@ -114,6 +115,7 @@ function Start-Observer {
         "stdout=$stdout",
         "stderr=$stderr",
         "branch=$ExpectedBranch",
+        'provenance=PACKAGE-MANIFEST runtime_branch stamp; named Git branch checked only when available',
         "known_good_fifa_sha256=$ExpectedFifaHash",
         'runtime_guard=18 exact decrypted instruction preimages; any mismatch makes native evidence VOID'
     ) | Set-Content -LiteralPath $StampFile -Encoding UTF8
