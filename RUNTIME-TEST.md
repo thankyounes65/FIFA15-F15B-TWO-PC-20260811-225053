@@ -1,20 +1,20 @@
-# Player B runtime test — demangler no-Frida v3
+# Player B runtime test — identity/session v4
 
 ## Pair
-- Player A: `thankyounes65/fifa15-relay-clean` -> `integration/test-matchmaking-demangler-join-dedupe-v9`
-- Player B: `integration/test-matchmaking-b-demangler-no-frida-v3`
+- Player A: `thankyounes65/fifa15-relay-clean` -> `integration/test-matchmaking-identity-session-coherence-v10`
+- Player B: `integration/test-matchmaking-b-identity-session-v4`
 
 ## Purpose
-Validate FUT Online Single Match end-to-end after removing the in-process native diagnostic mechanism implicated in Player A's previous crash.
+Validate FUT Online Single Match end-to-end against the host v10 GameManager PlayerID and GameSessionUpdated ordering correction.
 
-The previous run reached pairing/native GameSessionUpdated on A and DirtySDK ProtoMangle on B, then A died immediately after the generated-code branch trace began. B subsequently reported lost opponent. This run therefore changes the diagnostic variable, not the retained matchmaking protocol candidate.
+The v9 run proved A no longer crashes, raw UDP/3659 is strongly bidirectional, and B can still remain on the loading screen. Host v10 therefore fixes the two concrete above-transport defects from that run: one coherent GameManager PlayerID namespace and deferring the host's peer GameSessionUpdated until B is genuinely ACTIVE_CONNECTED from client-reported mesh state.
 
-## V3 safety rule
-v3 uses **no in-process instrumentation** during matchmaking. No Frida, Stalker, native GSU tracer, or native observer is attached to Player B's FIFA process. Player A v9 follows the same rule.
+Player B v4 is appliance/provenance only. It does not fabricate PlayerID or session data locally.
 
-Historical `guest-native-gsu-*` files may remain in the repository, but `RUN-FIFA15-F15B.bat` does not start them and package preflight rejects a launcher that does.
+## Safety
+V4 uses **no in-process FIFA instrumentation**. No Frida, Stalker, native GSU tracer, or native observer is attached. Historical native files may remain for archaeology, but the launcher does not start them and package preflight rejects activation.
 
-## Retained runtime behavior
+## Retained B behavior
 - Tailscale bootstrap and exact restoration;
 - host readiness gate;
 - local LSX/EA readiness;
@@ -25,18 +25,18 @@ Historical `guest-native-gsu-*` files may remain in the repository, but `RUN-FIF
 - automatic evidence collection.
 
 ## Run
-1. Pull/checkout this exact Player B branch.
+1. Pull/checkout this exact branch.
 2. Run `RUN-FIFA15-F15B.bat` normally.
-3. Let preflight complete; it will wait for Player A's v9 demangler/readiness service.
-4. On FIFA, enter Ultimate Team -> Online Single Match.
+3. Let preflight finish and wait for Player A v10 readiness.
+4. Both enter FUT -> Online Single Match.
 5. Player A searches first; Player B searches about three seconds later.
-6. If both reach the pre-match lobby, ready normally and continue into the match.
-7. If a blocker appears, leave it stable for about 30 seconds, then close normally so passive evidence is collected.
+6. Do not cancel after pairing.
+7. If the shared lobby appears, ready normally once and continue through team selection/kickoff.
+8. If gameplay starts, continue long enough to prove stable two-way control/synchronization.
+9. If a stable blocker remains, leave it for about 30 seconds, then close normally for passive evidence collection.
 
 ## Full success criterion
-Both clients pair, both enter the same pre-match lobby, normal ready/team progression succeeds, both enter the same live match, and the connection remains stable with bidirectional gameplay.
+Both clients pair, both render the same pre-match lobby, ready/team progression succeeds, both enter the same live match, each controls its own team, and gameplay remains connected.
 
 ## Preflight failures that matter
-Wrong branch/package stamp, Tailscale failure, unreachable host demangler, failed forwarder, failed passive network observer, EA/LSX readiness failure, CA verification failure, or inability to reach Blaze are real prerequisites and stop the run.
-
-Frida availability, native byte guards, retained dumps, Node, native tracer startup and native evidence appending are intentionally **not** prerequisites in v3.
+Wrong branch/package stamp, Tailscale failure, unreachable host demangler, failed forwarder, failed passive network observer, EA/LSX readiness failure, CA verification failure, or inability to reach Blaze are real prerequisites. Frida, native byte guards, retained dumps and Node are not v4 prerequisites.
