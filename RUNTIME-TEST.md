@@ -10,7 +10,7 @@ Validate FUT Online Single Match end-to-end after removing the in-process native
 The previous run reached pairing/native GameSessionUpdated on A and DirtySDK ProtoMangle on B, then A died immediately after the generated-code branch trace began. B subsequently reported lost opponent. This run therefore changes the diagnostic variable, not the retained matchmaking protocol candidate.
 
 ## V3 safety rule
-**No in-process Frida, Stalker, native GSU tracer, or native observer is attached to Player B's FIFA process.** Player A v9 follows the same rule.
+v3 uses **no in-process instrumentation** during matchmaking. No Frida, Stalker, native GSU tracer, or native observer is attached to Player B's FIFA process. Player A v9 follows the same rule.
 
 Historical `guest-native-gsu-*` files may remain in the repository, but `RUN-FIFA15-F15B.bat` does not start them and package preflight rejects a launcher that does.
 
