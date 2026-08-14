@@ -20,6 +20,7 @@ IMPORTANT DOCUMENTATION
 - PLAYER-B-BOOT-AND-CONNECT.md  complete reconstruction, failure history, networking and cleanup
 - PLAYER-B-KNOWN-GOOD.json      machine-readable exact successful Player B state/hashes
 - VERIFY-PLAYER-B-GAME-FILES.bat read-only audit of a local FIFA install against that state
+- RUNTIME-TEST.md               exact current matchmaking scenario and success criteria
 
 This public repo does NOT redistribute proprietary FIFA/crack DLLs. It records filenames/hashes and
 verifies files supplied by an installation you are authorized to use.
@@ -60,17 +61,27 @@ Configured host preservation address:
   100.91.142.54
 
 The launcher waits for the host READY beacon and proves TCP 42127 is reachable.
-The canonical EA/FIFA hostname list is fifa15-managed-hostnames.ps1. Those 14 names route to the
-host. peach.online.ea.com deliberately remains pinned to 127.0.0.1 on Player B.
+The canonical EA/FIFA hostname list is fifa15-managed-hostnames.ps1. The normal relay names plus
+production demangler.ea.com route to the host. peach.online.ea.com deliberately remains pinned to
+127.0.0.1 on Player B and is carried to the host by the local TCP/3658 forwarder.
 
-Two literal loopback services need special handling on a physical remote PC. RUN-FIFA15-F15B.bat
+Three literal loopback services need special handling on a physical remote PC. RUN-FIFA15-F15B.bat
 starts a transparent byte-for-byte forwarder before FIFA:
 
+  127.0.0.1:3658  -> 100.91.142.54:3658    DirtySDK ProtoMangle for peach.online.ea.com
   127.0.0.1:17502 -> 100.91.142.54:17502   QoS/TLS
   127.0.0.1:17503 -> 100.91.142.54:17503   FUT REST
 
 Healthy startup includes:
   F15B_LOOPBACK_FORWARDER_READY
+
+RUNTIME PACKAGE PROVENANCE
+The current Player B runtime is stamped in PACKAGE-MANIFEST.json as:
+  integration/test-matchmaking-b-demangler-native-v2
+
+A named Git branch is NOT required when the tester was downloaded as a GitHub ZIP or is on a
+detached checkout. RUN-FIFA15-F15B.bat validates the package stamp and required files before making
+any machine changes. If a named Git branch is available, it must match the stamped runtime.
 
 EA / LSX STARTUP ORDER - DO NOT SHORTEN
 The early Ian crash was fixed by waiting for EA App readiness. The package must:
@@ -97,12 +108,14 @@ After FIFA/module attach, the package follows the proven timing:
 Only after the launcher says FIFA 15 is ready should you navigate the game.
 
 RUN
-1. thankyounes starts the coordinator-selected RUN-TWO-PC-HOST.bat and leaves it running.
+1. thankyounes starts the coordinator-selected host runtime through the Universal Branch Tester and leaves it running.
 2. Double-click RUN-FIFA15-F15B.bat and approve the administrator prompt.
 3. Complete Tailscale browser login with YOUR OWN account only if requested.
-4. Wait for all automated preflight, EA readiness, routing, forwarder and CA checks.
-5. Follow the current host runtime test's FIFA actions.
+4. Wait for all automated package-provenance, demangler, EA readiness, routing, forwarder and CA checks.
+5. Follow RUNTIME-TEST.md for the current FIFA actions.
 6. Close FIFA when that scenario is finished. Cleanup is automatic.
+
+No manual Git branch switching is required on Player B for a correctly stamped ZIP/detached package.
 
 IF FIFA IS NOT AUTO-DETECTED
 Select the real fifa15.exe in the file picker. Non-standard paths are supported; the executable hash
@@ -112,7 +125,7 @@ DIAGNOSTICS
 Every run writes:
   Desktop\FIFA15-F15B-DIAG-YYYYMMDD-HHMMSS.txt
 
-The QoS/FUT forwarder writes:
+The QoS/FUT/ProtoMangle forwarder writes:
   Desktop\FIFA15-F15B-FORWARDER-YYYYMMDD-HHMMSS.log
 
 If anything fails, preserve/send BOTH newest files before changing another variable.
@@ -128,5 +141,5 @@ RESTORATION
 - emergency cleanup: CLEANUP-FIFA15-F15B.bat
 
 Test family: FIFA15 remote Player B / f15b
-Guest runtime: ea-readiness-v1 + loopback-forwarder-17502-17503
-For full details, read PLAYER-B-BOOT-AND-CONNECT.md.
+Guest runtime: ea-readiness-v1 + demangler-native-v2 + loopback-forwarder-3658-17502-17503
+For full details, read PLAYER-B-BOOT-AND-CONNECT.md and RUNTIME-TEST.md.
