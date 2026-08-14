@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
-title FIFA 15 Remote Player - f15b - Identity Session V4
+title FIFA 15 Remote Player - f15b - Post-Mesh GSU V5
 
 set "PACKAGE_PREFLIGHT=%~dp0runtime-package-preflight.ps1"
 if not exist "%PACKAGE_PREFLIGHT%" (
@@ -19,18 +19,22 @@ if errorlevel 1 (
   exit /b 43
 )
 
-rem A previous diagnostic branch may have left a waiting native observer PID. Stop
-rem it before FIFA exists; v4 never starts or self-tests the observer.
+rem Previous diagnostic/runtime branches may leave either observer waiting. Stop
+rem them before FIFA exists. v5 never starts or self-tests the native observer.
 if exist "%~dp0guest-native-gsu-observer.ps1" (
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-native-gsu-observer.ps1" -Stop >nul 2>&1
+)
+if exist "%~dp0guest-network-observer.ps1" (
+  echo Stopping any stale passive Player B network observer from an earlier run...
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Stop >nul 2>&1
 )
 
 echo.
 echo ============================================================
-echo   FIFA15 PLAYER B - IDENTITY / SESSION V4
+echo   FIFA15 PLAYER B - POST-MESH GSU V5
 echo ============================================================
-echo   Paired host: integration/test-matchmaking-identity-session-coherence-v10
- echo   Match behavior: host v10 owns PlayerID/session-order correction.
+echo   Paired host: integration/test-matchmaking-postmesh-gsu-v10
+ echo   Match behavior: host v10 owns Finalize-conditioned post-mesh GSU replay.
 echo   Routing: retain proven Tailscale + ProtoMangle/QoS/FUT forwarders.
 echo   Crash isolation: NO Frida/Stalker/native observer is attached.
 echo   Passive LSX/Blaze/network observation remains enabled.
@@ -77,7 +81,7 @@ set "OBSSTARTRC=%ERRORLEVEL%"
 if not "%OBSSTARTRC%"=="0" goto :guest_preflight_failed
 
 echo.
-echo V4 crash guard active: native GSU/Frida observer is intentionally NOT started.
+echo V5 crash guard active: native GSU/Frida observer is intentionally NOT started.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0diagnostic-run.ps1"
 set "RC=%ERRORLEVEL%"
 
@@ -120,7 +124,7 @@ if not "%RC%"=="0" (
   pause
 ) else (
   echo.
-  echo Test finished against host v10 with passive network diagnostics only.
+  echo Test finished against post-mesh GSU host v10 with passive network diagnostics only.
   echo Send the newest FIFA15-F15B-EVIDENCE-*.zip from the Desktop.
 )
 exit /b %RC%
