@@ -1,43 +1,25 @@
 {
   "format": 3,
-  "package_revision": "ea-readiness-v1+demangler-no-frida-v3+loopback-forwarder-3658-17502-17503",
-  "runtime_branch": "integration/test-matchmaking-b-demangler-no-frida-v3",
+  "package_revision": "ea-readiness-v1+identity-session-v4+demangler-no-frida+loopback-forwarder-3658-17502-17503",
+  "runtime_branch": "integration/test-matchmaking-b-identity-session-v4",
   "role": "f15b",
-  "note": "Proven physical Player B package with tester-owned Tailscale account + shared host, exact-state restoration, local LSX, EA App readiness gate, direct CA write/readback, and loopback forwarding of DirtySDK ProtoMangle 3658, QoS 17502 and FUT REST 17503. V3 intentionally does not attach Frida/Stalker/native GSU instrumentation to FIFA during matchmaking validation. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records observed hashes/provenance.",
-  "documentation_files": [
-    "README-FIRST.txt",
-    "PLAYER-B-BOOT-AND-CONNECT.md",
-    "PLAYER-B-KNOWN-GOOD.json",
-    "RUNTIME-TEST.md"
-  ],
-  "verification_files": [
-    "VERIFY-PLAYER-B-GAME-FILES.bat",
-    "VERIFY-PLAYER-B-GAME-FILES.ps1",
-    "runtime-package-preflight.ps1",
-    "demangler-preflight.ps1",
-    "guest-network-observer.ps1"
-  ],
+  "note": "Player B package paired with host matchmaking identity/session coherence v10. Preserves exact-state restoration, local LSX, EA readiness, CA write/readback, ProtoMangle/QoS/FUT loopback forwarding and passive network evidence. No Frida/Stalker/native FIFA instrumentation is attached. The v10 GameManager PlayerID/session-order correction is host relay behavior; B contains only the paired appliance/provenance update.",
+  "documentation_files": ["README-FIRST.txt","PLAYER-B-BOOT-AND-CONNECT.md","PLAYER-B-KNOWN-GOOD.json","RUNTIME-TEST.md"],
+  "verification_files": ["VERIFY-PLAYER-B-GAME-FILES.bat","VERIFY-PLAYER-B-GAME-FILES.ps1","runtime-package-preflight.ps1","demangler-preflight.ps1","guest-network-observer.ps1"],
   "runtime_features": {
     "exact_restore": "restore-v3",
     "ea_readiness_gate": true,
     "ea_readiness_stability_seconds": 10,
     "lsx_local_port": 3216,
-    "loopback_forward_ports": [3658, 17502, 17503],
+    "loopback_forward_ports": [3658,17502,17503],
     "demangler_host_port": 3658,
     "host_ready_port": 48215,
     "host_preflight_port": 42127,
-    "in_process_fifa_instrumentation": false
+    "in_process_fifa_instrumentation": false,
+    "paired_host_branch": "integration/test-matchmaking-identity-session-coherence-v10"
   },
   "binary_files": [
-    {
-      "name": "ca_modulus_1024.bin",
-      "bytes": 128,
-      "sha256": "5A6C7E9A1DAF98099BBE5C97C4ABD5FE6315FDDA4439F77A18635EE56C146A3A"
-    },
-    {
-      "name": "tailscale-amd64.msi",
-      "bytes": 38354432,
-      "sha256": "D2EB69E103B08A5B77DE9D7CB8555541AA99F7DFC6048850B2286A1048C885F9"
-    }
+    {"name":"ca_modulus_1024.bin","bytes":128,"sha256":"5A6C7E9A1DAF98099BBE5C97C4ABD5FE6315FDDA4439F77A18635EE56C146A3A"},
+    {"name":"tailscale-amd64.msi","bytes":38354432,"sha256":"D2EB69E103B08A5B77DE9D7CB8555541AA99F7DFC6048850B2286A1048C885F9"}
   ]
 }
