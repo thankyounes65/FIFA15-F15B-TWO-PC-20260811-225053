@@ -52,6 +52,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-native-gsu-o
 set "NATIVESELFRC=%ERRORLEVEL%"
 if not "%NATIVESELFRC%"=="0" goto :guest_preflight_failed
 
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0append-native-gsu-evidence.ps1" -SelfTest
+set "APPENDSELFRC=%ERRORLEVEL%"
+if not "%APPENDSELFRC%"=="0" goto :guest_preflight_failed
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-native-gsu-observer.ps1" -Start
 set "NATIVESTARTRC=%ERRORLEVEL%"
 if not "%NATIVESTARTRC%"=="0" goto :guest_preflight_failed
@@ -87,6 +91,10 @@ set "EVIDRC=%ERRORLEVEL%"
 if not "%EVIDRC%"=="0" (
   echo WARNING: automatic evidence bundling failed with error %EVIDRC%.
   echo Keep the newest FIFA15-F15B-DIAG-*.txt, FIFA15-F15B-NETWORK-*.log, FIFA15-F15B-NATIVE-GSU-* and FIFA15-F15B-FORWARDER-*.log files on the Desktop.
+) else (
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0append-native-gsu-evidence.ps1"
+  set "APPENDRC=%ERRORLEVEL%"
+  if not "!APPENDRC!"=="0" echo WARNING: native GSU files could not be appended automatically; keep the Desktop FIFA15-F15B-NATIVE-GSU-* files with the ZIP.
 )
 
 if "%OBSRC%"=="41" (
