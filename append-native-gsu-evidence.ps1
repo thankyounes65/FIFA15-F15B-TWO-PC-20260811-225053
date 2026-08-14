@@ -5,6 +5,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2
 
 $StampFile = Join-Path $env:TEMP 'fifa15-f15b-native-gsu-tracer.stamp'
+$ExpectedBranch = 'integration/test-matchmaking-b-demangler-native-v2'
 
 function Invoke-SelfTest {
     $tokens = $null
@@ -12,7 +13,7 @@ function Invoke-SelfTest {
     [Management.Automation.Language.Parser]::ParseFile($PSCommandPath,[ref]$tokens,[ref]$errors) | Out-Null
     if ($errors -and $errors.Count -gt 0) { throw "PowerShell parse failed: $((@($errors | ForEach-Object Message)) -join '; ')" }
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
-    foreach ($marker in @('fifa15-f15b-native-gsu-tracer.stamp','jsonl','text','stdout','stderr','Compress-Archive','-Update','NATIVE-GSU-MANIFEST')) {
+    foreach ($marker in @('fifa15-f15b-native-gsu-tracer.stamp','jsonl','text','stdout','stderr','Compress-Archive','-Update','NATIVE-GSU-MANIFEST',$ExpectedBranch)) {
         if (-not $source.Contains($marker)) { throw "missing native evidence marker: $marker" }
     }
     Write-Host 'PASS: native GSU evidence appender parses and preserves exact stamped observer output in the existing one-ZIP Player B bundle.' -ForegroundColor Green
@@ -63,7 +64,7 @@ try {
     @(
         'FIFA15 Player-B native GSU evidence manifest',
         "generated_utc=$((Get-Date).ToUniversalTime().ToString('o'))",
-        'branch=integration/test-matchmaking-b-native-gsu-v1',
+        "branch=$ExpectedBranch",
         'fifa_sha256_expected=3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB',
         "observer_stamp_present=$($stamp.Count -gt 0)",
         "observer_stamp=$($stamp['stamp'])",
