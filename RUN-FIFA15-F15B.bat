@@ -19,6 +19,12 @@ if errorlevel 1 (
   exit /b 43
 )
 
+rem A previous diagnostic branch may have left a waiting native observer PID. Stop
+rem it before FIFA exists; v3 never starts or self-tests the observer.
+if exist "%~dp0guest-native-gsu-observer.ps1" (
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-native-gsu-observer.ps1" -Stop >nul 2>&1
+)
+
 echo.
 echo ============================================================
 echo   FIFA15 PLAYER B - DEMANGLER NO-FRIDA V3
