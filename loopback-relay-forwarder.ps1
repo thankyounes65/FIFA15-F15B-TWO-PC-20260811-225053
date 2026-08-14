@@ -13,7 +13,11 @@ $Root = Split-Path -Parent $PSCommandPath
 $ConfigPath = Join-Path $Root 'APPLIANCE-CONFIG.json'
 $StateDir = Join-Path $env:ProgramData 'FIFA15-Preservation'
 $PidPath = Join-Path $StateDir 'f15b-loopback-forwarder.pid'
-$Ports = @(17502, 17503)
+# 17502/17503 preserve the proven QoS/FUT forwarding. 3658 is DirtySDK
+# ProtoMangle: Player B's role-specific peach.online.ea.com mapping stays
+# loopback, and this forwards that exact local connection to the host-side
+# demangler service without exposing or inventing another client endpoint.
+$Ports = @(3658, 17502, 17503)
 
 function Info([string]$Text) { Write-Host "  $Text" -ForegroundColor Gray }
 function Fail([string]$Code, [string]$Text) { Write-Host "STOP [$Code]: $Text" -ForegroundColor Red; exit 1 }
@@ -53,14 +57,14 @@ function Invoke-SelfTest {
     $errors = $null
     [Management.Automation.Language.Parser]::ParseFile($PSCommandPath,[ref]$tokens,[ref]$errors) | Out-Null
     if ($errors -and $errors.Count -gt 0) { throw "PowerShell parse failed: $((@($errors | ForEach-Object Message)) -join '; ')" }
-    if (($Ports | Sort-Object -Unique).Count -ne 2 -or 17502 -notin $Ports -or 17503 -notin $Ports) {
-        throw 'Forwarder must contain exactly the two proven loopback service ports 17502 and 17503.'
+    if (($Ports | Sort-Object -Unique).Count -ne 3 -or 3658 -notin $Ports -or 17502 -notin $Ports -or 17503 -notin $Ports) {
+        throw 'Forwarder must contain exactly ProtoMangle 3658 plus proven QoS/FUT ports 17502 and 17503.'
     }
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
-    foreach ($marker in @('F15B_LOOPBACK_FORWARDER_READY','127.0.0.1','ConnectAsync','17502','17503')) {
+    foreach ($marker in @('F15B_LOOPBACK_FORWARDER_READY','127.0.0.1','ConnectAsync','3658','17502','17503')) {
         if ($source -notmatch [regex]::Escape($marker)) { throw "Missing forwarder marker: $marker" }
     }
-    Write-Host 'PASS: loopback relay forwarder parses and is scoped only to QoS 17502 + FUT REST 17503.' -ForegroundColor Green
+    Write-Host 'PASS: loopback relay forwarder parses and is scoped to ProtoMangle 3658 + QoS 17502 + FUT REST 17503.' -ForegroundColor Green
 }
 
 if ($SelfTest) {
@@ -203,7 +207,7 @@ do {
 
 if (-not $ready) {
     Stop-Process -Id $child.Id -Force -ErrorAction SilentlyContinue
-    Fail 'LOOPBACK_FORWARDER_START_FAILED' "Forwarder PID $($child.Id) did not own both 127.0.0.1:17502 and :17503 within 10 seconds. Check $LogPath"
+    Fail 'LOOPBACK_FORWARDER_START_FAILED' "Forwarder PID $($child.Id) did not own 127.0.0.1:3658/:17502/:17503 within 10 seconds. Check $LogPath"
 }
 
 Set-Content -LiteralPath $PidPath -Value $child.Id -Encoding ASCII -NoNewline
