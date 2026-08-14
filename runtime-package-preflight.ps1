@@ -11,6 +11,7 @@ $ManagedHostsPath = Join-Path $Root 'fifa15-managed-hostnames.ps1'
 $ForwarderPath = Join-Path $Root 'loopback-relay-forwarder.ps1'
 $DemanglerPreflightPath = Join-Path $Root 'demangler-preflight.ps1'
 $LauncherPath = Join-Path $Root 'RUN-FIFA15-F15B.bat'
+$GitMetadataPath = Join-Path $Root '.git'
 
 function Fail([string]$Text) { Write-Host "PLAYER B PACKAGE PREFLIGHT FAILED: $Text" -ForegroundColor Red; exit 43 }
 function Require-File([string]$Path) { if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { Fail "required runtime file is missing: $Path" } }
@@ -41,9 +42,18 @@ foreach ($port in @(3658,17502,17503)) {
     if ($port -notin $ports) { Fail "manifest missing loopback forward port $port." }
 }
 
-$namedBranch = Get-NamedGitBranch
-if (-not $namedBranch) { Fail 'could not resolve a named Git branch for Player B package provenance.' }
-if ($namedBranch -ne $ExpectedBranch) { Fail "named checkout '$namedBranch' != '$ExpectedBranch'." }
+# A checked-out repository must prove the exact named runtime branch. A GitHub
+# archive/package intentionally has no .git metadata, so it cannot satisfy
+# branch --show-current. In that archive case the embedded v12 manifest plus the
+# exact runtime marker checks below are the provenance contract.
+if (Test-Path -LiteralPath $GitMetadataPath) {
+    $namedBranch = Get-NamedGitBranch
+    if (-not $namedBranch) { Fail 'Git metadata is present, but a named Player B runtime branch could not be resolved.' }
+    if ($namedBranch -ne $ExpectedBranch) { Fail "named checkout '$namedBranch' != '$ExpectedBranch'." }
+    Write-Host "PASS: Player B Git checkout branch is exactly $ExpectedBranch." -ForegroundColor Green
+} else {
+    Write-Host 'INFO: no .git metadata is present; treating this as a packaged GitHub archive and validating embedded v12 provenance.' -ForegroundColor Cyan
+}
 
 Require-Contains $RuntimeTestPath @($ExpectedBranch,$ExpectedHostBranch,'no in-process FIFA instrumentation','ACTIVE_CONNECTED','NotifyPlayerJoinCompleted')
 Require-Contains $ManagedHostsPath @('demangler.ea.com')
@@ -60,5 +70,5 @@ if ($SelfTest) {
     [Management.Automation.Language.Parser]::ParseFile($PSCommandPath,[ref]$tokens,[ref]$errors) | Out-Null
     if ($errors -and $errors.Count -gt 0) { Fail "preflight parse failed: $((@($errors | ForEach-Object Message)) -join '; ')" }
 }
-Write-Host 'PASS: Player B v12 package is on the exact paired branch, targets host promotion-notification v12, retains routing/passive evidence, and has no in-process FIFA instrumentation.' -ForegroundColor Green
+Write-Host 'PASS: Player B v12 package provenance matches the exact paired branches, retains routing/passive evidence, and has no in-process FIFA instrumentation.' -ForegroundColor Green
 exit 0
