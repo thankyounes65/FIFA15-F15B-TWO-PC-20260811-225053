@@ -14,16 +14,13 @@ function Fail([string]$Text) {
     exit 1
 }
 
-function Test-TcpPort([string]$HostIp, [int]$RemotePort, [int]$TimeoutMs = 1500) {
-    $client = $null
+function Register-PlayerB([string]$HostIp) {
+    $uri = "http://$HostIp`:$Port/appliance/register?role=f15b"
     try {
-        $client = New-Object Net.Sockets.TcpClient
-        $task = $client.ConnectAsync($HostIp, $RemotePort)
-        return ($task.Wait($TimeoutMs) -and $client.Connected)
+        $response = Invoke-WebRequest -UseBasicParsing -Uri $uri -Method Get -TimeoutSec 3 -ErrorAction Stop
+        return ($response.StatusCode -eq 200 -and ([string]$response.Content).Trim() -eq 'registered')
     } catch {
         return $false
-    } finally {
-        if ($client) { $client.Close() }
     }
 }
 
@@ -33,10 +30,18 @@ function Invoke-SelfTest {
     [Management.Automation.Language.Parser]::ParseFile($PSCommandPath,[ref]$tokens,[ref]$errors) | Out-Null
     if ($errors -and $errors.Count -gt 0) { throw (($errors | ForEach-Object Message) -join '; ') }
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
-    foreach ($marker in @('3658','ConnectAsync','APPLIANCE-CONFIG.json','DEMANGLER_HOST_UNREACHABLE','WaitSeconds = 600','Waiting for host DirtySDK ProtoMangle')) {
+    foreach ($marker in @(
+        '3658',
+        'Invoke-WebRequest',
+        '/appliance/register?role=f15b',
+        'APPLIANCE-CONFIG.json',
+        'DEMANGLER_HOST_UNREACHABLE',
+        'WaitSeconds = 600',
+        'Waiting for host DirtySDK ProtoMangle'
+    )) {
         if ($source -notmatch [regex]::Escape($marker)) { throw "missing demangler-preflight marker: $marker" }
     }
-    Write-Host 'PASS: Player B demangler preflight parses, is read-only, and can wait for A without launching FIFA.' -ForegroundColor Green
+    Write-Host 'PASS: Player B demangler preflight parses, is read-only to FIFA, and registers the current tailnet peer before runtime.' -ForegroundColor Green
 }
 
 try {
@@ -55,15 +60,16 @@ try {
     Write-Host "Waiting for host DirtySDK ProtoMangle at $hostIp`:$Port (up to $WaitSeconds seconds)..." -ForegroundColor Gray
     $deadline = (Get-Date).AddSeconds($WaitSeconds)
     do {
-        if (Test-TcpPort -HostIp $hostIp -RemotePort $Port) {
-            Write-Host "PASS: host-side DirtySDK ProtoMangle service reachable at $hostIp`:$Port" -ForegroundColor Green
+        if (Register-PlayerB -HostIp $hostIp) {
+            Write-Host "PASS: host-side ProtoMangle HTTP service is ready and registered this Player B tailnet endpoint at $hostIp`:$Port" -ForegroundColor Green
+            Write-Host 'NOTE: this appliance registration is infrastructure preflight only; only demangler_get_peer_address is FIFA runtime proof.' -ForegroundColor Gray
             exit 0
         }
         Start-Sleep -Seconds 1
     } until ((Get-Date) -ge $deadline)
 
-    Write-Host 'STOP [DEMANGLER_HOST_UNREACHABLE]: host-side DirtySDK ProtoMangle service never became reachable.' -ForegroundColor Red
-    Write-Host "Expected: $hostIp`:$Port" -ForegroundColor Red
+    Write-Host 'STOP [DEMANGLER_HOST_UNREACHABLE]: host-side DirtySDK ProtoMangle HTTP service never became reachable/registerable.' -ForegroundColor Red
+    Write-Host "Expected: $hostIp`:$Port/appliance/register?role=f15b" -ForegroundColor Red
     exit 1
 } catch {
     Fail $_.Exception.Message
