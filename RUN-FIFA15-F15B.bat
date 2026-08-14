@@ -27,30 +27,21 @@ if not "%FWDRC%"=="0" (
 )
 
 echo.
+echo Verifying the complete host relay reachability preflight...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0host-core-preflight.ps1" -SelfTest
+if errorlevel 1 goto :guest_preflight_failed
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0host-core-preflight.ps1"
+if errorlevel 1 goto :guest_preflight_failed
+
+echo.
 echo Verifying the read-only Player B LSX/Blaze network observer...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -SelfTest
 set "OBSSELFRC=%ERRORLEVEL%"
-if not "%OBSSELFRC%"=="0" (
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1" -Cleanup
-  echo.
-  echo The Player B network observer self-test failed with error %OBSSELFRC%.
-  echo FIFA was not launched.
-  pause
-  exit /b %OBSSELFRC%
-)
+if not "%OBSSELFRC%"=="0" goto :guest_preflight_failed
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Start
 set "OBSSTARTRC=%ERRORLEVEL%"
-if not "%OBSSTARTRC%"=="0" (
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1" -Cleanup
-  echo.
-  echo The Player B network observer could not start with error %OBSSTARTRC%.
-  echo FIFA was not launched.
-  pause
-  exit /b %OBSSTARTRC%
-)
+if not "%OBSSTARTRC%"=="0" goto :guest_preflight_failed
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0diagnostic-run.ps1"
 set "RC=%ERRORLEVEL%"
@@ -104,3 +95,13 @@ if not "%RC%"=="0" (
   echo Send the newest FIFA15-F15B-EVIDENCE-*.zip from your Desktop to thankyounes.
 )
 exit /b %RC%
+
+:guest_preflight_failed
+echo.
+echo PLAYER B PREFLIGHT FAILED - FIFA WAS NOT LAUNCHED.
+echo The host READY/core-port or read-only network-observer check failed above.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Stop >nul 2>&1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1" -Cleanup
+pause
+exit /b 1
