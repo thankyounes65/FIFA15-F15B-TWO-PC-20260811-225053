@@ -3,8 +3,10 @@
 ## Subsystem
 Online Matchmaking / FUT Online Single Match / Player B permanent loading boundary.
 
-## Branch
+## Runtime package
 `integration/test-matchmaking-b-demangler-native-v2`
+
+A named local Git branch is **not required** when this tester is distributed as a GitHub ZIP or detached checkout. `PACKAGE-MANIFEST.json` stamps the runtime branch, and `runtime-package-preflight.ps1` validates that stamp plus the required runtime files before any machine state is changed. If a named Git branch is available, it must still match the runtime package.
 
 ## Paired host branch
 `thankyounes65/fifa15-relay-clean` -> `integration/test-matchmaking-demangler-join-dedupe-v8`.
@@ -15,7 +17,7 @@ Online Matchmaking / FUT Online Single Match / Player B permanent loading bounda
 ## Exact tested hypothesis
 Two independently supported defects are corrected while the existing native diagnostics remain armed:
 
-1. **DirtySDK ProtoMangle reachability.** The retail FIFA 15 client contains the EA demangler protocol on TCP/3658. The previous Player B appliance deliberately mapped `peach.online.ea.com` to `127.0.0.1` but had no 3658 service there. This branch keeps that role-specific loopback mapping and extends the existing loopback forwarder so 127.0.0.1:3658 reaches the paired host's ProtoMangle service. `demangler.ea.com` is also routed directly to the host.
+1. **DirtySDK ProtoMangle reachability.** The retail FIFA 15 client contains the EA demangler protocol on TCP/3658. The previous Player B appliance deliberately mapped `peach.online.ea.com` to `127.0.0.1` but had no 3658 service there. This runtime keeps that role-specific loopback mapping and extends the existing loopback forwarder so 127.0.0.1:3658 reaches the paired host's ProtoMangle service. `demangler.ea.com` is routed directly to the host.
 2. **JoinCompleted one-shot contract.** The paired host branch removes the duplicate mesh-promotion self-JoinCompleted for the logical joiner. Player B still receives its required JoinCompleted immediately after InitiateConnections, while the later mesh completion is delivered only to the other participant.
 
 The purpose of this run is to determine whether those changes let Player B enter the pre-match lobby and allow the session to continue end-to-end. If not, the existing exact-byte native GameSetup/JoinCompleted/GSU trace remains available to name the next boundary.
@@ -23,25 +25,27 @@ The purpose of this run is to determine whether those changes let Player B enter
 ## Runtime state
 - Tailscale transport remains unchanged.
 - QoS/FUT loopback forwarding remains unchanged on 17502/17503.
-- New forwarder port: TCP/3658 -> host TCP/3658.
+- ProtoMangle loopback forwarding is TCP/3658 -> host TCP/3658.
 - `peach.online.ea.com` remains loopback on Player B and is therefore carried through that 3658 forwarder.
 - `demangler.ea.com` routes directly to the host overlay address.
 - Before FIFA, the preflight calls host `/appliance/register?role=f15b` directly over Tailscale so the demangler knows B's current tailnet source even if only A enters `MNGL`.
 - That registration changes only temporary demangler infrastructure state; it does not modify FIFA or Blaze state and is logged `runtime_proof=false`.
-- No game binary bytes are changed by this branch beyond the already-proven live CA patch required by the appliance.
+- No game binary bytes are changed by this runtime beyond the already-proven live CA patch required by the appliance.
 - Native GSU observer remains read-only and exact-byte guarded.
 
 ## Preflight
-Run only through `RUN-FIFA15-F15B.bat` on this branch.
+**The Player B operator only needs to double-click `RUN-FIFA15-F15B.bat`.** Do not manually switch branches just to satisfy the launcher.
 
 Before FIFA is launched the BAT must prove:
 
-- correct Git branch;
+- package provenance: `PACKAGE-MANIFEST.json` identifies `integration/test-matchmaking-b-demangler-native-v2`; a named Git branch is checked only when one exists;
+- the production `demangler.ea.com` route remains in the host-routed managed inventory;
+- the local `peach.online.ea.com` route still has the TCP/3658 loopback forwarder to the host;
 - Tailscale is connected;
 - the host ProtoMangle HTTP service becomes reachable within the bounded wait and successfully registers this remote tailnet source;
 - the 3658/17502/17503 loopback forwarder self-test passes and all three local listeners are owned by the package worker;
 - the existing Player B LSX/Blaze observer self-test passes;
-- the exact-byte native observer self-test passes;
+- the exact-byte native observer self-test passes using the same package provenance contract;
 - the native evidence appender self-test passes.
 
 The B BAT may be started before A is fully ready; the demangler readiness step waits up to 10 minutes and still refuses to launch FIFA if registration never succeeds.
@@ -54,7 +58,7 @@ Any failed prerequisite is **VOID**, not a matchmaking failure.
 
 ## Exact FIFA actions
 1. On Player A, use the universal branch tester and select `integration/test-matchmaking-demangler-join-dedupe-v8`.
-2. On Player B, run `RUN-FIFA15-F15B.bat` from this branch and allow every preflight to pass.
+2. On Player B, double-click `RUN-FIFA15-F15B.bat` from the current v2 package and allow every preflight to pass.
 3. On both clients enter Ultimate Team -> Online Single Match.
 4. Player A searches first.
 5. About 3 seconds later, Player B searches second.
@@ -88,4 +92,4 @@ The host evidence separately records preflight registration and every FIFA `/get
 - No runtime demangler request occurs and matchmaking works: the duplicate JoinCompleted correction is the stronger explanation for this scenario.
 - No runtime demangler request occurs and Player B still blocks: demangler is **Not Reached** for this failure; use the native GSU evidence to continue from the exact consumer boundary.
 - Runtime demangler succeeds but Player B still blocks: network fallback is no longer the first divergence; inspect GSU and exact JoinCompleted counts before changing transport again.
-- Wrong branch, unavailable/register-failing host 3658, failed forwarder, missing Frida, failed byte guard, stale FIFA process, or failed build prerequisite: **VOID**.
+- Invalid/outdated package provenance, unavailable/register-failing host 3658, failed forwarder, missing Frida, failed byte guard, stale FIFA process, or failed build prerequisite: **VOID**.
