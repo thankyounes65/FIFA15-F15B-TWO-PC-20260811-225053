@@ -29,8 +29,8 @@ echo.
 echo ============================================================
 echo   FIFA15 PLAYER B - IDENTITY / SESSION V4
 echo ============================================================
-echo   Paired host: integration/test-matchmaking-identity-session-coherence-v10
- echo   Match behavior: host v10 owns PlayerID/session-order correction.
+echo   Paired host: integration/test-matchmaking-postmesh-gsu-v10
+ echo   Match behavior: host v10 owns post-mesh GameSessionUpdated ordering correction.
 echo   Routing: retain proven Tailscale + ProtoMangle/QoS/FUT forwarders.
 echo   Crash isolation: NO Frida/Stalker/native observer is attached.
 echo   Passive LSX/Blaze/network observation remains enabled.
@@ -120,7 +120,7 @@ if not "%RC%"=="0" (
   pause
 ) else (
   echo.
-  echo Test finished against host v10 with passive network diagnostics only.
+  echo Test finished against host post-mesh GSU v10 with passive network diagnostics only.
   echo Send the newest FIFA15-F15B-EVIDENCE-*.zip from the Desktop.
 )
 exit /b %RC%
