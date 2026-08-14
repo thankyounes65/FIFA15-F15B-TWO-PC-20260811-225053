@@ -16,11 +16,26 @@ function Fail([string]$Text) {
 
 function Register-PlayerB([string]$HostIp) {
     $uri = "http://$HostIp`:$Port/appliance/register?role=f15b"
+    $response = $null
+    $reader = $null
     try {
-        $response = Invoke-WebRequest -UseBasicParsing -Uri $uri -Method Get -TimeoutSec 3 -ErrorAction Stop
-        return ($response.StatusCode -eq 200 -and ([string]$response.Content).Trim() -eq 'registered')
+        # Bypass Windows/IE proxy configuration. This is an appliance-local
+        # Tailscale control request and must go directly to the configured host.
+        $request = [Net.HttpWebRequest]::Create($uri)
+        $request.Method = 'GET'
+        $request.Proxy = $null
+        $request.Timeout = 3000
+        $request.ReadWriteTimeout = 3000
+        $request.KeepAlive = $false
+        $response = [Net.HttpWebResponse]$request.GetResponse()
+        $reader = New-Object IO.StreamReader($response.GetResponseStream(), [Text.Encoding]::ASCII)
+        $body = $reader.ReadToEnd().Trim()
+        return ([int]$response.StatusCode -eq 200 -and $body -eq 'registered')
     } catch {
         return $false
+    } finally {
+        if ($reader) { $reader.Dispose() }
+        if ($response) { $response.Dispose() }
     }
 }
 
@@ -32,7 +47,8 @@ function Invoke-SelfTest {
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
     foreach ($marker in @(
         '3658',
-        'Invoke-WebRequest',
+        'HttpWebRequest',
+        '$request.Proxy = $null',
         '/appliance/register?role=f15b',
         'APPLIANCE-CONFIG.json',
         'DEMANGLER_HOST_UNREACHABLE',
@@ -41,7 +57,7 @@ function Invoke-SelfTest {
     )) {
         if ($source -notmatch [regex]::Escape($marker)) { throw "missing demangler-preflight marker: $marker" }
     }
-    Write-Host 'PASS: Player B demangler preflight parses, is read-only to FIFA, and registers the current tailnet peer before runtime.' -ForegroundColor Green
+    Write-Host 'PASS: Player B demangler preflight parses, bypasses system proxies, and registers the current tailnet peer before runtime.' -ForegroundColor Green
 }
 
 try {
