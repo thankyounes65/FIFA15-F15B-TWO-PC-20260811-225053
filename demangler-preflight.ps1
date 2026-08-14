@@ -7,6 +7,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSCommandPath
 $ConfigPath = Join-Path $Root 'APPLIANCE-CONFIG.json'
+$ManagedHostnamesPath = Join-Path $Root 'fifa15-managed-hostnames.ps1'
+$ForwarderPath = Join-Path $Root 'loopback-relay-forwarder.ps1'
 $Port = 3658
 
 function Fail([string]$Text) {
@@ -57,7 +59,26 @@ function Invoke-SelfTest {
     )) {
         if ($source -notmatch [regex]::Escape($marker)) { throw "missing demangler-preflight marker: $marker" }
     }
-    Write-Host 'PASS: Player B demangler preflight parses, bypasses system proxies, and registers the current tailnet peer before runtime.' -ForegroundColor Green
+
+    if (-not (Test-Path -LiteralPath $ManagedHostnamesPath -PathType Leaf)) {
+        throw "missing managed hostname inventory: $ManagedHostnamesPath"
+    }
+    . $ManagedHostnamesPath
+    if (-not $Fifa15RedirectableHostnames -or 'demangler.ea.com' -notin $Fifa15RedirectableHostnames) {
+        throw 'Player B managed hostname inventory must route demangler.ea.com to the configured Player A host.'
+    }
+
+    if (-not (Test-Path -LiteralPath $ForwarderPath -PathType Leaf)) {
+        throw "missing loopback forwarder: $ForwarderPath"
+    }
+    $forwarderSource = Get-Content -LiteralPath $ForwarderPath -Raw
+    foreach ($marker in @('3658','peach.online.ea.com','127.0.0.1')) {
+        if ($forwarderSource -notmatch [regex]::Escape($marker)) {
+            throw "Player B loopback ProtoMangle forwarder lost required marker: $marker"
+        }
+    }
+
+    Write-Host 'PASS: Player B demangler preflight parses, bypasses system proxies, keeps demangler.ea.com in the host-routed inventory, preserves peach.online.ea.com through the loopback TCP/3658 forwarder, and registers the current tailnet peer before runtime.' -ForegroundColor Green
 }
 
 try {
