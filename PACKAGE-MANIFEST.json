@@ -1,16 +1,22 @@
 {
   "format": 3,
-  "package_revision": "ea-readiness-v1+loopback-forwarder-3658-17502-17503",
+  "package_revision": "ea-readiness-v1+demangler-native-v2+loopback-forwarder-3658-17502-17503",
+  "runtime_branch": "integration/test-matchmaking-b-demangler-native-v2",
   "role": "f15b",
-  "note": "Proven physical Player B package plus matchmaking diagnostic extension: tester-owned Tailscale account + shared host; exact-state restoration; package LSX on 127.0.0.1:3216; full EA App readiness gate stable for 10 seconds; 500 ms direct CA write/readback; transparent loopback forwarding of DirtySDK ProtoMangle 3658, QoS 17502 and FUT REST 17503. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records their observed hashes/provenance.",
+  "note": "Proven physical Player B package plus matchmaking diagnostic extension: tester-owned Tailscale account + shared host; exact-state restoration; package LSX on 127.0.0.1:3216; full EA App readiness gate stable for 10 seconds; 500 ms direct CA write/readback; transparent loopback forwarding of DirtySDK ProtoMangle 3658, QoS 17502 and FUT REST 17503. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records their observed hashes/provenance. The runtime_branch stamp is authoritative for ZIP/detached package provenance when Git branch metadata is unavailable.",
   "documentation_files": [
     "README-FIRST.txt",
     "PLAYER-B-BOOT-AND-CONNECT.md",
-    "PLAYER-B-KNOWN-GOOD.json"
+    "PLAYER-B-KNOWN-GOOD.json",
+    "RUNTIME-TEST.md"
   ],
   "verification_files": [
     "VERIFY-PLAYER-B-GAME-FILES.bat",
-    "VERIFY-PLAYER-B-GAME-FILES.ps1"
+    "VERIFY-PLAYER-B-GAME-FILES.ps1",
+    "runtime-package-preflight.ps1",
+    "demangler-preflight.ps1",
+    "guest-native-gsu-observer.ps1",
+    "append-native-gsu-evidence.ps1"
   ],
   "runtime_features": {
     "exact_restore": "restore-v3",
