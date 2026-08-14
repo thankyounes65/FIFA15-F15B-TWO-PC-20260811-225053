@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 title FIFA 15 Remote Player - f15b - Native GSU Diagnostic
 
@@ -93,7 +93,7 @@ if not "%EVIDRC%"=="0" (
   echo Keep the newest FIFA15-F15B-DIAG-*.txt, FIFA15-F15B-NETWORK-*.log, FIFA15-F15B-NATIVE-GSU-* and FIFA15-F15B-FORWARDER-*.log files on the Desktop.
 ) else (
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0append-native-gsu-evidence.ps1"
-  set "APPENDRC=%ERRORLEVEL%"
+  set "APPENDRC=!ERRORLEVEL!"
   if not "!APPENDRC!"=="0" echo WARNING: native GSU files could not be appended automatically; keep the Desktop FIFA15-F15B-NATIVE-GSU-* files with the ZIP.
 )
 
