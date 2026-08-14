@@ -3,8 +3,8 @@ param([switch]$SelfTest)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2
 $Root = Split-Path -Parent $PSCommandPath
-$ExpectedBranch = 'integration/test-matchmaking-b-identity-session-v4'
-$ExpectedHostBranch = 'integration/test-matchmaking-identity-session-coherence-v10'
+$ExpectedBranch = 'integration/test-matchmaking-b-postmesh-gsu-v5'
+$ExpectedHostBranch = 'integration/test-matchmaking-postmesh-gsu-v10'
 $ManifestPath = Join-Path $Root 'PACKAGE-MANIFEST.json'
 $RuntimeTestPath = Join-Path $Root 'RUNTIME-TEST.md'
 $ManagedHostsPath = Join-Path $Root 'fifa15-managed-hostnames.ps1'
@@ -34,7 +34,8 @@ Require-File $ManifestPath
 try { $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json } catch { Fail "invalid manifest: $($_.Exception.Message)" }
 if ([int]$manifest.format -ne 3 -or [string]$manifest.role -ne 'f15b') { Fail 'unexpected package format/role.' }
 if ([string]$manifest.runtime_branch -ne $ExpectedBranch) { Fail "manifest branch '$($manifest.runtime_branch)' != '$ExpectedBranch'." }
-if ([bool]$manifest.runtime_features.in_process_fifa_instrumentation) { Fail 'v4 must not attach in-process FIFA instrumentation.' }
+if ([string]$manifest.runtime_features.paired_host_branch -ne $ExpectedHostBranch) { Fail "manifest host branch '$($manifest.runtime_features.paired_host_branch)' != '$ExpectedHostBranch'." }
+if ([bool]$manifest.runtime_features.in_process_fifa_instrumentation) { Fail 'v5 must not attach in-process FIFA instrumentation.' }
 foreach ($port in @(3658,17502,17503)) {
     $ports = @($manifest.runtime_features.loopback_forward_ports | ForEach-Object { [int]$_ })
     if ($port -notin $ports) { Fail "manifest missing loopback forward port $port." }
@@ -42,20 +43,20 @@ foreach ($port in @(3658,17502,17503)) {
 
 $namedBranch = Get-NamedGitBranch
 if ($namedBranch -and $namedBranch -ne $ExpectedBranch) { Fail "named checkout '$namedBranch' != '$ExpectedBranch'." }
-Require-Contains $RuntimeTestPath @($ExpectedBranch,$ExpectedHostBranch,'no in-process','GameSessionUpdated','PlayerID')
+Require-Contains $RuntimeTestPath @($ExpectedBranch,$ExpectedHostBranch,'no in-process','GameSessionUpdated','FinalizeGameCreation','STAT=4')
 Require-Contains $ManagedHostsPath @('demangler.ea.com')
 Require-Contains $ForwarderPath @('3658','17502','17503','peach.online.ea.com','127.0.0.1')
 Require-Contains $DemanglerPreflightPath @('/appliance/register?role=f15b','$request.Proxy = $null','DEMANGLER_HOST_UNREACHABLE')
-Require-Contains $LauncherPath @('guest-network-observer.ps1','demangler-preflight.ps1','NO Frida/Stalker/native observer is attached')
+Require-Contains $LauncherPath @('guest-network-observer.ps1','demangler-preflight.ps1','NO Frida/Stalker/native observer is attached','Stopping any stale passive Player B network observer')
 
 $launcher = Get-Content -LiteralPath $LauncherPath -Raw
 foreach ($forbidden in @('guest-native-gsu-observer.ps1" -Start','guest-native-gsu-trace.py','append-native-gsu-evidence.ps1')) {
-    if ($launcher.Contains($forbidden)) { Fail "v4 launcher activates/refers to forbidden native path: $forbidden" }
+    if ($launcher.Contains($forbidden)) { Fail "v5 launcher activates/refers to forbidden native path: $forbidden" }
 }
 if ($SelfTest) {
     $tokens=$null; $errors=$null
     [Management.Automation.Language.Parser]::ParseFile($PSCommandPath,[ref]$tokens,[ref]$errors) | Out-Null
     if ($errors -and $errors.Count -gt 0) { Fail "preflight parse failed: $((@($errors | ForEach-Object Message)) -join '; ')" }
 }
-Write-Host 'PASS: Player B v4 package is paired with host v10; routing/passive evidence remain armed and in-process FIFA instrumentation remains disabled.' -ForegroundColor Green
+Write-Host 'PASS: Player B v5 package is paired with post-mesh GSU host v10; stale passive-observer cleanup, routing/passive evidence and no-Frida guards are present.' -ForegroundColor Green
 exit 0
