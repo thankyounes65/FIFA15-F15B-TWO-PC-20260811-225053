@@ -1,17 +1,28 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
-title FIFA 15 Remote Player - f15b - Native GSU Diagnostic
+title FIFA 15 Remote Player - f15b - Demangler + Native GSU V2
 
+set "EXPECTED_BRANCH=integration/test-matchmaking-b-demangler-native-v2"
 for /f "delims=" %%H in ('git branch --show-current 2^>nul') do set "CURRENT_BRANCH=%%H"
-if /I not "%CURRENT_BRANCH%"=="integration/test-matchmaking-b-native-gsu-v1" (
+if /I not "%CURRENT_BRANCH%"=="%EXPECTED_BRANCH%" (
   echo.
-  echo PLAYER B PREFLIGHT FAILED - WRONG DIAGNOSTIC BRANCH.
-  echo Expected: integration/test-matchmaking-b-native-gsu-v1
+  echo PLAYER B PREFLIGHT FAILED - WRONG RUNTIME BRANCH.
+  echo Expected: %EXPECTED_BRANCH%
   echo Current:  %CURRENT_BRANCH%
   pause
   exit /b 43
 )
+
+echo.
+echo ============================================================
+echo   FIFA15 PLAYER B - DEMANGLER + NATIVE GSU V2
+echo ============================================================
+echo   Behavioral change: Player B can reach DirtySDK ProtoMangle
+ echo   on TCP/3658 through the host preservation service.
+echo   Diagnostics: LSX/Blaze sockets + exact-byte native GSU trace.
+echo ============================================================
+echo.
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1"
 set "BOOTRC=%ERRORLEVEL%"
@@ -24,13 +35,24 @@ if not "%BOOTRC%"=="0" (
   exit /b %BOOTRC%
 )
 
+echo.
+echo Verifying the host-side DirtySDK ProtoMangle service before FIFA is touched...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0demangler-preflight.ps1" -SelfTest
+if errorlevel 1 goto :guest_preflight_failed
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0demangler-preflight.ps1"
+if errorlevel 1 goto :guest_preflight_failed
+
+echo.
+echo Verifying the loopback QoS/FUT/ProtoMangle forwarder...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -SelfTest
+if errorlevel 1 goto :guest_preflight_failed
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Start
 set "FWDRC=%ERRORLEVEL%"
 if not "%FWDRC%"=="0" (
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1" -Cleanup
   echo.
-  echo The FIFA 15 appliance stopped while preparing remote QoS/FUT routing with error %FWDRC%.
+  echo The FIFA 15 appliance stopped while preparing remote QoS/FUT/demangler routing with error %FWDRC%.
   echo Nothing in FIFA was changed. Send the newest FIFA15-F15B-FORWARDER-*.log from your Desktop to thankyounes.
   pause
   exit /b %FWDRC%
@@ -85,7 +107,7 @@ if not "%CLEANRC%"=="0" (
 )
 
 echo.
-echo Collecting Player-B diagnostic, network, native GSU, forwarder and crash evidence into one ZIP...
+echo Collecting Player-B diagnostic, network, native GSU, demangler-forwarder and crash evidence into one ZIP...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0collect-evidence.ps1"
 set "EVIDRC=%ERRORLEVEL%"
 if not "%EVIDRC%"=="0" (
@@ -116,7 +138,7 @@ if not "%RC%"=="0" (
   pause
 ) else (
   echo.
-  echo Test finished with Player B LSX/Blaze and native GSU diagnostics armed.
+  echo Test finished with Player B demangler routing, LSX/Blaze and native GSU diagnostics armed.
   echo Send the newest FIFA15-F15B-EVIDENCE-*.zip from your Desktop to thankyounes.
 )
 exit /b %RC%
@@ -124,7 +146,7 @@ exit /b %RC%
 :guest_preflight_failed
 echo.
 echo PLAYER B PREFLIGHT FAILED - FIFA WAS NOT LAUNCHED.
-echo The read-only network/native observer check failed above.
+echo The demangler/network/native observer check failed above.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-native-gsu-observer.ps1" -Stop >nul 2>&1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Stop >nul 2>&1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
