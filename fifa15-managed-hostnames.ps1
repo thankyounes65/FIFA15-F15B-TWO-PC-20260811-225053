@@ -10,12 +10,12 @@
 # its own incomplete copy and silently dropped the other four, and fifa15.exe
 # escaped straight to a real EA IP the next time it asked for one of them.
 #
-# peach.online.ea.com (the DirtySDK demangler host) is deliberately NOT in
-# this list. On a single machine it stays loopback like everything else here,
-# but on the two-machine/Tailscale remote-client role it must stay pinned to
-# 127.0.0.1 on that machine while everything else in this list routes to the
-# host's relay address - callers that need peach.online.ea.com folded in
-# should append it themselves; callers that must keep it separate already do.
+# demangler.ea.com is DirtySDK ProtoMangle's production default. In this
+# two-machine runtime it follows the relay host address so Player B reaches the
+# host-side TCP/3658 ProtoMangle service. peach.online.ea.com is added separately
+# by remote-client.ps1 to the same host address because it is the DirtySDK
+# development/test demangler name and older package revisions intentionally kept
+# it role-specific.
 $Fifa15RedirectableHostnames = @(
     'gosredirector.ea.com',
     'gosredirector.online.ea.com',
@@ -30,5 +30,6 @@ $Fifa15RedirectableHostnames = @(
     'easw.easports.com',
     'xmlns.easw.easports.com',
     'eac-fifapow02.eac.ad.ea.com',
-    'fifa.easports.com'
+    'fifa.easports.com',
+    'demangler.ea.com'
 )
