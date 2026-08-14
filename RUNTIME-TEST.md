@@ -1,18 +1,18 @@
-# Player B runtime test — post-mesh GSU v5
+# Player B runtime test — promotion notification v12
 
 ## Pair
-- Player A: `thankyounes65/fifa15-relay-clean` -> `integration/test-matchmaking-postmesh-gsu-v10`
-- Player B: `integration/test-matchmaking-b-postmesh-gsu-v5`
+- Player A: `thankyounes65/fifa15-relay-clean` -> `integration/test-matchmaking-promotion-notification-bundle-v12`
+- Player B: `integration/test-matchmaking-b-promotion-notification-v12`
 
 ## Purpose
-Validate FUT Online Single Match end-to-end against the host v10 Finalize-conditioned post-mesh `GameSessionUpdated` ordering correction.
+Provide an exact-provenance Player B appliance for the host v12 notification-combination test.
 
-The v9 run proved A no longer crashes, raw UDP/3659 is strongly bidirectional, and B can still remain on the loading screen. The concrete ordering defect is that B received the copied `GameSessionUpdated` while still connecting and only afterward received its real mesh-driven `STAT=4`/ACTIVE_CONNECTED promotion. Host v10 preserves the observed GID-only/empty-XNet session shape and replays it once after real promotion when FIFA previously sent `FinalizeGameCreation`.
+The latest v11 run reached reciprocal mesh, bidirectional UDP/3659 and the intended receiver-side post-peer GameSessionUpdated replay, yet the logical joiner still remained on the loading screen. Host v12 preserves that stack and changes one lifecycle decision only: after the joiner is promoted ACTIVE_CONNECTED, its promotion-time `NotifyPlayerJoinCompleted(joiner)` is delivered to both client streams instead of suppressing the joiner's copy as a duplicate.
 
-Player B v5 is appliance/provenance only. It does not fabricate session, mesh, PlayerID, XNet, PRE_GAME, or demangler data locally. It also stops any stale passive network observer left by an earlier aborted run before arming a fresh observer.
+Player B contains no matchmaking behavior of its own and therefore needs no protocol mutation for v12. This branch exists so the package manifest, launcher and fail-closed preflight name the exact paired host scenario rather than silently reusing v10 provenance.
 
 ## Safety
-V5 uses **no in-process FIFA instrumentation**. No Frida, Stalker, native GSU tracer, or native observer is attached. Historical native files may remain for archaeology, but the launcher does not start them and package preflight rejects activation.
+No in-process FIFA instrumentation. No Frida, Stalker, native GSU tracer, or native observer is attached. Historical native files may remain for archaeology, but the launcher does not start them and package preflight rejects activation.
 
 ## Retained B behavior
 - Tailscale bootstrap and exact restoration;
@@ -27,16 +27,17 @@ V5 uses **no in-process FIFA instrumentation**. No Frida, Stalker, native GSU tr
 ## Run
 1. Pull/checkout this exact branch.
 2. Run `RUN-FIFA15-F15B.bat` normally.
-3. Let preflight finish and wait for Player A v10 readiness.
+3. Require package preflight PASS and wait for Player A v12 readiness.
 4. Both enter FUT -> Online Single Match.
 5. Player A searches first; Player B searches about three seconds later.
 6. Do not cancel after pairing.
-7. If the shared lobby appears, ready normally once and continue through team selection/kickoff.
-8. If gameplay starts, continue long enough to prove stable two-way control/synchronization.
-9. If a stable blocker remains, leave it for about 30 seconds, then close normally for passive evidence collection.
+7. If the shared lobby appears, Player B readies first; verify Player A still sees B and the ready state remains coherent.
+8. Then ready Player A and continue through team selection/kickoff if stable.
+9. If gameplay starts, continue long enough to prove stable two-way control/synchronization.
+10. If a stable blocker remains, leave it briefly for passive evidence collection, then close normally.
 
 ## Full success criterion
 Both clients pair, both render the same pre-match lobby, ready/team progression succeeds, both enter the same live match, each controls its own team, and gameplay remains connected.
 
 ## Preflight failures that matter
-Wrong branch/package stamp, Tailscale failure, unreachable host demangler, failed forwarder, failed passive network observer, EA/LSX readiness failure, CA verification failure, or inability to reach Blaze are real prerequisites. Frida, native byte guards, retained dumps and Node are not v5 prerequisites.
+Wrong branch/package stamp or paired-host branch, Tailscale failure, unreachable host demangler, failed forwarder, failed passive network observer, EA/LSX readiness failure, CA verification failure, or inability to reach Blaze are real prerequisites. Any such failure makes the runtime VOID.
