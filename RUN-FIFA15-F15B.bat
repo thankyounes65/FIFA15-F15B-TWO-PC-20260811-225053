@@ -3,13 +3,22 @@ setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 title FIFA 15 Remote Player - f15b - Demangler + Native GSU V2
 
-set "EXPECTED_BRANCH=integration/test-matchmaking-b-demangler-native-v2"
-for /f "delims=" %%H in ('git branch --show-current 2^>nul') do set "CURRENT_BRANCH=%%H"
-if /I not "%CURRENT_BRANCH%"=="%EXPECTED_BRANCH%" (
+set "PACKAGE_PREFLIGHT=%~dp0runtime-package-preflight.ps1"
+if not exist "%PACKAGE_PREFLIGHT%" (
   echo.
-  echo PLAYER B PREFLIGHT FAILED - WRONG RUNTIME BRANCH.
-  echo Expected: %EXPECTED_BRANCH%
-  echo Current:  %CURRENT_BRANCH%
+  echo PLAYER B PREFLIGHT FAILED - MISSING RUNTIME PACKAGE PREFLIGHT.
+  echo Re-download or update the Player B tester package.
+  pause
+  exit /b 43
+)
+
+echo.
+echo Verifying Player B packaged runtime provenance before any machine changes...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PACKAGE_PREFLIGHT%" -SelfTest
+if errorlevel 1 (
+  echo.
+  echo PLAYER B PREFLIGHT FAILED - FIFA WAS NOT LAUNCHED.
+  echo The package/runtime provenance check failed above.
   pause
   exit /b 43
 )
