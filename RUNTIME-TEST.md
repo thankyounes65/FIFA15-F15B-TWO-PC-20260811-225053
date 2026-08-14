@@ -1,15 +1,15 @@
 # Player B runtime test — identity/session v4
 
 ## Pair
-- Player A: `thankyounes65/fifa15-relay-clean` -> `integration/test-matchmaking-identity-session-coherence-v10`
+- Player A: `thankyounes65/fifa15-relay-clean` -> `integration/test-matchmaking-postmesh-gsu-v10`
 - Player B: `integration/test-matchmaking-b-identity-session-v4`
 
 ## Purpose
-Validate FUT Online Single Match end-to-end against the host v10 GameManager PlayerID and GameSessionUpdated ordering correction.
+Validate FUT Online Single Match end-to-end against the host v10 post-mesh GameSessionUpdated ordering correction.
 
-The v9 run proved A no longer crashes, raw UDP/3659 is strongly bidirectional, and B can still remain on the loading screen. Host v10 therefore fixes the two concrete above-transport defects from that run: one coherent GameManager PlayerID namespace and deferring the host's peer GameSessionUpdated until B is genuinely ACTIVE_CONNECTED from client-reported mesh state.
+The v9 run proved A no longer crashes, raw UDP/3659 is strongly bidirectional, and B can still remain on the loading screen. The current host v10 therefore tests the concrete above-transport ordering defect from that run: B received the copied GameSessionUpdated before B was genuinely ACTIVE_CONNECTED from client-reported mesh state.
 
-Player B v4 is appliance/provenance only. It does not fabricate PlayerID or session data locally.
+Player B v4 is appliance/provenance only. It does not fabricate PlayerID or session data locally and it does not attach any in-process FIFA instrumentation.
 
 ## Safety
 V4 uses **no in-process FIFA instrumentation**. No Frida, Stalker, native GSU tracer, or native observer is attached. Historical native files may remain for archaeology, but the launcher does not start them and package preflight rejects activation.
@@ -27,7 +27,7 @@ V4 uses **no in-process FIFA instrumentation**. No Frida, Stalker, native GSU tr
 ## Run
 1. Pull/checkout this exact branch.
 2. Run `RUN-FIFA15-F15B.bat` normally.
-3. Let preflight finish and wait for Player A v10 readiness.
+3. Let preflight finish and wait for Player A post-mesh GSU v10 readiness.
 4. Both enter FUT -> Online Single Match.
 5. Player A searches first; Player B searches about three seconds later.
 6. Do not cancel after pairing.
