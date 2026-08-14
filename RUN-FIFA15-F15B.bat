@@ -26,8 +26,38 @@ if not "%FWDRC%"=="0" (
   exit /b %FWDRC%
 )
 
+echo.
+echo Verifying the read-only Player B LSX/Blaze network observer...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -SelfTest
+set "OBSSELFRC=%ERRORLEVEL%"
+if not "%OBSSELFRC%"=="0" (
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1" -Cleanup
+  echo.
+  echo The Player B network observer self-test failed with error %OBSSELFRC%.
+  echo FIFA was not launched.
+  pause
+  exit /b %OBSSELFRC%
+)
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Start
+set "OBSSTARTRC=%ERRORLEVEL%"
+if not "%OBSSTARTRC%"=="0" (
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1" -Cleanup
+  echo.
+  echo The Player B network observer could not start with error %OBSSTARTRC%.
+  echo FIFA was not launched.
+  pause
+  exit /b %OBSSTARTRC%
+)
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0diagnostic-run.ps1"
 set "RC=%ERRORLEVEL%"
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Stop -AppendToNewestDiag
+set "OBSRC=%ERRORLEVEL%"
+if "%RC%"=="0" if not "%OBSRC%"=="0" set "RC=%OBSRC%"
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
 set "FWDSTOPRC=%ERRORLEVEL%"
@@ -43,12 +73,23 @@ if not "%CLEANRC%"=="0" (
 )
 
 echo.
-echo Collecting the three Player-B evidence files into one ZIP...
+echo Collecting Player-B diagnostic, network, forwarder and crash evidence into one ZIP...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0collect-evidence.ps1"
 set "EVIDRC=%ERRORLEVEL%"
 if not "%EVIDRC%"=="0" (
   echo WARNING: automatic evidence bundling failed with error %EVIDRC%.
-  echo Keep the newest FIFA15-F15B-DIAG-*.txt and FIFA15-F15B-FORWARDER-*.log files on the Desktop.
+  echo Keep the newest FIFA15-F15B-DIAG-*.txt, FIFA15-F15B-NETWORK-*.log and FIFA15-F15B-FORWARDER-*.log files on the Desktop.
+)
+
+if "%OBSRC%"=="41" (
+  echo.
+  echo PLAYER B PREREQUISITE FAILURE: FIFA never established its required local LSX connection.
+  echo This is before Blaze matchmaking; do not treat it as a Matchmaking branch result.
+)
+if "%OBSRC%"=="42" (
+  echo.
+  echo PLAYER B PREREQUISITE FAILURE: local LSX worked, but FIFA never established Blaze TCP 42128 to the host relay.
+  echo This is before matchmaking pairing; do not treat it as a Matchmaking branch result.
 )
 
 if not "%RC%"=="0" (
@@ -59,6 +100,7 @@ if not "%RC%"=="0" (
   pause
 ) else (
   echo.
-  echo Test finished. Send the newest FIFA15-F15B-EVIDENCE-*.zip from your Desktop to thankyounes.
+  echo Test finished with Player B LSX and Blaze connectivity both confirmed.
+  echo Send the newest FIFA15-F15B-EVIDENCE-*.zip from your Desktop to thankyounes.
 )
 exit /b %RC%
