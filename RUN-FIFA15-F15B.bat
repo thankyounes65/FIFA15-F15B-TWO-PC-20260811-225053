@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
-title FIFA 15 Remote Player - f15b - Demangler No-Frida V3
+title FIFA 15 Remote Player - f15b - Identity Session V4
 
 set "PACKAGE_PREFLIGHT=%~dp0runtime-package-preflight.ps1"
 if not exist "%PACKAGE_PREFLIGHT%" (
@@ -20,16 +20,18 @@ if errorlevel 1 (
 )
 
 rem A previous diagnostic branch may have left a waiting native observer PID. Stop
-rem it before FIFA exists; v3 never starts or self-tests the observer.
+rem it before FIFA exists; v4 never starts or self-tests the observer.
 if exist "%~dp0guest-native-gsu-observer.ps1" (
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-native-gsu-observer.ps1" -Stop >nul 2>&1
 )
 
 echo.
 echo ============================================================
-echo   FIFA15 PLAYER B - DEMANGLER NO-FRIDA V3
+echo   FIFA15 PLAYER B - IDENTITY / SESSION V4
 echo ============================================================
-echo   Match behavior: retain proven Tailscale + ProtoMangle routing.
+echo   Paired host: integration/test-matchmaking-identity-session-coherence-v10
+ echo   Match behavior: host v10 owns PlayerID/session-order correction.
+echo   Routing: retain proven Tailscale + ProtoMangle/QoS/FUT forwarders.
 echo   Crash isolation: NO Frida/Stalker/native observer is attached.
 echo   Passive LSX/Blaze/network observation remains enabled.
 echo ============================================================
@@ -75,7 +77,7 @@ set "OBSSTARTRC=%ERRORLEVEL%"
 if not "%OBSSTARTRC%"=="0" goto :guest_preflight_failed
 
 echo.
-echo V3 crash guard active: native GSU/Frida observer is intentionally NOT started.
+echo V4 crash guard active: native GSU/Frida observer is intentionally NOT started.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0diagnostic-run.ps1"
 set "RC=%ERRORLEVEL%"
 
@@ -118,7 +120,7 @@ if not "%RC%"=="0" (
   pause
 ) else (
   echo.
-  echo Test finished with demangler routing and passive network diagnostics only.
+  echo Test finished against host v10 with passive network diagnostics only.
   echo Send the newest FIFA15-F15B-EVIDENCE-*.zip from the Desktop.
 )
 exit /b %RC%
