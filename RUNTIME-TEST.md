@@ -1,64 +1,85 @@
-# Player B runtime test — native GSU observer v1
+# Player B runtime test — demangler + native GSU v2
 
 ## Subsystem
 Online Matchmaking / FUT Online Single Match / Player B permanent loading boundary.
 
 ## Branch
-`integration/test-matchmaking-b-native-gsu-v1`
+`integration/test-matchmaking-b-demangler-native-v2`
 
 ## Paired host branch
-`thankyounes65/fifa15-relay-clean` -> `integration/test-matchmaking-gsu-bilateral-trace-v7`.
+`thankyounes65/fifa15-relay-clean` -> `integration/test-matchmaking-demangler-join-dedupe-v8`.
 
 ## Status
 **Implemented, runtime proof pending.**
 
-## Purpose
-Player B previously showed the permanent stadium/loading background while the host relay proved that B still emitted mesh reports and SetPlayerAttributes `REQ=1`. The prior B network observer proved process/socket reachability but did not observe FIFA's native GameSetup/ConnApi/GameSessionUpdated consumer.
+## Exact tested hypothesis
+Two independently supported defects are corrected while the existing native diagnostics remain armed:
 
-This branch changes no Tailscale, forwarder, FUT, LSX, Blaze, game-file, or matchmaking protocol behavior. It adds a read-only native observer only.
+1. **DirtySDK ProtoMangle reachability.** The retail FIFA 15 client contains the EA demangler protocol on TCP/3658. The previous Player B appliance deliberately mapped `peach.online.ea.com` to `127.0.0.1` but had no 3658 service there. This branch keeps the safe role-specific loopback mapping and extends the existing loopback forwarder so 127.0.0.1:3658 reaches the paired host's ProtoMangle service. `demangler.ea.com` is also routed to the host.
+2. **JoinCompleted one-shot contract.** The paired host branch removes the duplicate mesh-promotion self-JoinCompleted for the logical joiner. Player B still receives its required JoinCompleted immediately after InitiateConnections, while the later mesh completion is delivered only to the other participant.
 
-## Native evidence collected
-The observer uses the exact RVAs and runtime-decrypted instruction preimages already proven on Player A. `PLAYER-B-KNOWN-GOOD.json` pins the same `fifa15.exe` SHA-256, and all 18 probes fail closed on byte mismatch.
+The purpose of this run is to determine whether those changes let Player B enter the pre-match lobby and allow the session to continue end-to-end. If not, the existing exact-byte native GameSetup/JoinCompleted/GSU trace remains available to name the next boundary.
 
-It records:
-
-- GameSetup dispatcher reachability;
-- native roster/player registration completion;
-- JoinCompleted game/player lookup and callback reachability;
-- GameSessionUpdated entry and game lookup;
-- local-index gate;
-- native network predicate at RVA `0x47BC5B7`;
-- downstream local-player/game-flag/callback sites;
-- a bounded 150 ms post-predicate Stalker trace if the predicate site is reached.
-
-The observer does not modify registers, memory, branch conditions, game state, lifecycle state, or network state.
+## Runtime state
+- Tailscale transport remains unchanged.
+- QoS/FUT loopback forwarding remains unchanged on 17502/17503.
+- New forwarder port: TCP/3658 -> host TCP/3658.
+- `peach.online.ea.com` remains loopback on Player B and is therefore carried through that 3658 forwarder.
+- `demangler.ea.com` routes directly to the host overlay address.
+- No game binary bytes are changed by this branch beyond the already-proven live CA patch required by the appliance.
+- Native GSU observer remains read-only and exact-byte guarded.
 
 ## Preflight
-Run only through `RUN-FIFA15-F15B.bat` on this branch. It must pass both the existing network-observer self-test and the new native-observer self-test before FIFA is launched.
+Run only through `RUN-FIFA15-F15B.bat` on this branch.
 
-Python and the `frida` Python module are required for this diagnostic branch. If Frida is missing, the launcher stops before FIFA and prints:
+Before FIFA is launched the BAT must prove:
+
+- correct Git branch;
+- Tailscale is connected;
+- host TCP/3658 is reachable;
+- the 3658/17502/17503 loopback forwarder self-test passes and all three local listeners are owned by the package worker;
+- the existing Player B LSX/Blaze observer self-test passes;
+- the exact-byte native observer self-test passes;
+- the native evidence appender self-test passes.
+
+Python and the `frida` Python module are required. If Frida is missing, install it with:
 
 `python -m pip install frida`
 
-A missing prerequisite is **VOID**, not a matchmaking failure.
+Any failed prerequisite is **VOID**, not a matchmaking failure.
 
-## Exact actions
-1. Start `RUN-FIFA15-F15B.bat` and let all preflights pass.
-2. Enter FUT -> Online Single Match.
-3. Player A searches first on the paired host v7 branch.
-4. Wait roughly 3 seconds, then Player B searches second.
-5. If Player B reaches the same permanent loading screen, leave it untouched for at least 30 seconds.
-6. Use ready once only if FIFA exposes the same action as the previous run.
-7. If both clients progress, continue normally into team select/gameplay; otherwise stop at the stable blocker.
-8. Close FIFA normally and allow the package to create the newest `FIFA15-F15B-EVIDENCE-*.zip`.
+## Exact FIFA actions
+1. On Player A, use the universal branch tester and select `integration/test-matchmaking-demangler-join-dedupe-v8`.
+2. On Player B, run `RUN-FIFA15-F15B.bat` from this branch and allow every preflight to pass.
+3. On both clients enter Ultimate Team -> Online Single Match.
+4. Player A searches first.
+5. About 3 seconds later, Player B searches second.
+6. Do not cancel matchmaking or back out when the pair forms.
+7. If a pre-match lobby appears, ready exactly once when the normal UI permits it and continue normally through team selection and kickoff.
+8. If either client remains blocked, leave the stable blocker untouched for at least 30 seconds so the demangler/native traces finish.
+9. If gameplay starts, continue far enough to prove both clients control their teams and gameplay packets continue in both directions. A full match may be played if stable.
+10. Close FIFA normally and let the package finish evidence collection.
 
-## Required evidence
-The ZIP is automatically updated with the exact stamped native observer JSONL/text plus redirected stdout/stderr and a native evidence manifest. This makes observer/probe failure distinguishable from a genuine native path not being reached.
+## Success criterion
+The run is a matchmaking **PASS** only if both clients reach the same pre-match lobby, ready/team-selection state remains coherent, and both proceed into the same live match with bidirectional gameplay.
+
+A lobby-only improvement is useful progress but is not full end-to-end confirmation.
+
+## Evidence to collect
+The normal Player B evidence ZIP should contain:
+
+- diagnostic log;
+- LSX/Blaze network observer log;
+- forwarder log, including any `FORWARD_CONNECT local=127.0.0.1:3658` line if the client used the peach demangler name;
+- exact native GSU JSONL/text plus stdout/stderr;
+- crash evidence if generated.
+
+The host evidence separately records every `/getPeerAddress` and `/connectionStatus` transaction in `demangler.jsonl`, including the source IP, client-reported `myIP`/`myPort`, resolved peer IP/port and session id.
 
 ## Interpretation
-- no GameSetup dispatcher while host sent GameSetup -> delivery/dispatch boundary;
-- GameSetup reached but player registration/JoinCompleted lookup fails -> roster/identity boundary;
-- JoinCompleted completes but GSU never runs -> native session scheduling boundary;
-- GSU runs with `network_predicate=0` while A reports 1 -> B ConnApi/network-map/discovery coherence is primary; demangler/UpdateNetworkInfo work becomes justified;
-- both report predicate 1 but diverge immediately after -> reverse the exact branch/field before any bypass;
-- both take the same native path while only B stays blank -> move downstream to team-select/UI state rather than transport.
+- Host `demangler.jsonl` receives a Player B request and resolves A, then B reaches the lobby: **demangler path materially contributed; runtime behavior still must be validated end-to-end.**
+- Player B uses local 3658 (`FORWARD_CONNECT`) and host receives the request: the old loopback-with-no-listener defect is **Confirmed reached and corrected**.
+- No demangler request occurs and matchmaking now works: the duplicate JoinCompleted correction is the stronger explanation for this scenario.
+- No demangler request occurs and Player B still blocks: demangler is **Not Reached** for this failure; use the native GSU evidence to continue from the exact consumer boundary.
+- Demangler succeeds but Player B still blocks: network fallback is no longer the first divergence; inspect the GSU trace and exact JoinCompleted counts before changing transport again.
+- Wrong branch, unavailable host 3658, failed forwarder, missing Frida, failed byte guard, stale FIFA process, or failed build prerequisite: **VOID**.
