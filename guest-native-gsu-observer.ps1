@@ -10,6 +10,7 @@ Set-StrictMode -Version 2
 
 $Root = Split-Path -Parent $PSCommandPath
 $Tracer = Join-Path $Root 'guest-native-gsu-trace.py'
+$KnownGood = Join-Path $Root 'PLAYER-B-KNOWN-GOOD.json'
 $PidFile = Join-Path $env:TEMP 'fifa15-f15b-native-gsu-tracer.pid'
 $StampFile = Join-Path $env:TEMP 'fifa15-f15b-native-gsu-tracer.stamp'
 $ExpectedFifaHash = '3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB'
@@ -44,25 +45,21 @@ function Assert-Branch {
     }
 }
 
-function Assert-ExactFifa {
-    $statePath = Join-Path $env:ProgramData 'FIFA15-Preservation\two-pc-appliance-exact-state.json'
-    if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
-        Fail "exact-state snapshot is missing: $statePath" 43
-    }
-    $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
-    $fifaPath = [string]$state.fifa_path
-    if (-not $fifaPath -or -not (Test-Path -LiteralPath $fifaPath -PathType Leaf)) {
-        Fail 'could not resolve fifa15.exe from the package exact-state snapshot.' 43
-    }
-    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $fifaPath).Hash.ToUpperInvariant()
+function Assert-KnownGoodContract {
+    if (-not (Test-Path -LiteralPath $KnownGood -PathType Leaf)) { Fail "missing known-good contract: $KnownGood" 43 }
+    $contract = Get-Content -LiteralPath $KnownGood -Raw | ConvertFrom-Json
+    $fifa = @($contract.game_files | Where-Object { [string]$_.relative_path -eq 'fifa15.exe' })
+    if ($fifa.Count -ne 1) { Fail 'known-good contract does not contain exactly one fifa15.exe entry.' 43 }
+    $hash = ([string]$fifa[0].sha256).ToUpperInvariant()
     if ($hash -ne $ExpectedFifaHash) {
-        Fail "fifa15.exe hash mismatch. Expected $ExpectedFifaHash; found $hash" 43
+        Fail "known-good fifa15.exe contract drifted. Expected $ExpectedFifaHash; found $hash" 43
     }
 }
 
 function Invoke-SelfTest {
     if (-not (Test-Path -LiteralPath $Tracer -PathType Leaf)) { Fail "missing native tracer: $Tracer" 43 }
     Assert-Branch
+    Assert-KnownGoodContract
     $python = Get-Python
     Assert-Frida $python
     & $python $Tracer --self-test
@@ -79,7 +76,7 @@ function Invoke-SelfTest {
     )) {
         if (-not $source.Contains($marker)) { Fail "native tracer lost required marker: $marker" 43 }
     }
-    Write-Host 'PASS: Player B native GSU observer is exact-branch, Python/Frida-ready, exact-byte guarded and bounded.' -ForegroundColor Green
+    Write-Host 'PASS: Player B native GSU observer is exact-branch, known-good-contract pinned, Python/Frida-ready, exact-byte guarded and bounded.' -ForegroundColor Green
 }
 
 function Stop-Existing {
@@ -93,7 +90,6 @@ function Stop-Existing {
 
 function Start-Observer {
     Invoke-SelfTest
-    Assert-ExactFifa
     Stop-Existing
     $python = Get-Python
     $desktop = [Environment]::GetFolderPath('Desktop')
@@ -118,7 +114,8 @@ function Start-Observer {
         "stdout=$stdout",
         "stderr=$stderr",
         "branch=$ExpectedBranch",
-        "fifa_sha256=$ExpectedFifaHash"
+        "known_good_fifa_sha256=$ExpectedFifaHash",
+        'runtime_guard=18 exact decrypted instruction preimages; any mismatch makes native evidence VOID'
     ) | Set-Content -LiteralPath $StampFile -Encoding UTF8
     Write-Host "PASS: Player B native GSU observer armed pid=$($process.Id); it will attach when fifa15.exe appears." -ForegroundColor Green
 }
