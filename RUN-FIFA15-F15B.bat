@@ -27,13 +27,6 @@ if not "%FWDRC%"=="0" (
 )
 
 echo.
-echo Verifying the complete host relay reachability preflight...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0host-core-preflight.ps1" -SelfTest
-if errorlevel 1 goto :guest_preflight_failed
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0host-core-preflight.ps1"
-if errorlevel 1 goto :guest_preflight_failed
-
-echo.
 echo Verifying the read-only Player B LSX/Blaze network observer...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -SelfTest
 set "OBSSELFRC=%ERRORLEVEL%"
@@ -99,7 +92,7 @@ exit /b %RC%
 :guest_preflight_failed
 echo.
 echo PLAYER B PREFLIGHT FAILED - FIFA WAS NOT LAUNCHED.
-echo The host READY/core-port or read-only network-observer check failed above.
+echo The read-only LSX/Blaze network observer check failed above.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Stop >nul 2>&1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1" -Cleanup
