@@ -18,7 +18,11 @@ function Require-File([string]$Path) { if (-not (Test-Path -LiteralPath $Path -P
 function Require-Contains([string]$Path,[string[]]$Markers) {
     Require-File $Path
     $text = Get-Content -LiteralPath $Path -Raw
-    foreach ($marker in $Markers) { if (-not $text.Contains($marker)) { Fail "$([IO.Path]::GetFileName($Path)) lost required marker: $marker" } }
+    foreach ($marker in $Markers) {
+        if ($text.IndexOf($marker,[StringComparison]::OrdinalIgnoreCase) -lt 0) {
+            Fail "$([IO.Path]::GetFileName($Path)) lost required marker: $marker"
+        }
+    }
 }
 function Get-NamedGitBranch {
     $git = Get-Command git.exe -ErrorAction SilentlyContinue
