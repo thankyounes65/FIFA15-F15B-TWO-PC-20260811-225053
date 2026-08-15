@@ -8,8 +8,9 @@
   "host_runtime_policy": "coordinator-selected; guest boot/connect package is intentionally independent of host matchmaking branch",
   "historical_source_branch": "integration/test-matchmaking-two-client-pairing-v11",
   "tailscale_version": "1.102.2",
-  "candidate_id": "FIFA15-MM-V14-0X0B",
-  "package_attestation": "F15B-GITHUB-KNOWN-GOOD-20260811-V14-0X0B-1",
-  "expected_host_branch": "integration/test-matchmaking-session-completion-0x0b-v14",
+  "candidate_id": "FIFA15-MM-V15-GSU-NPSI",
+  "package_attestation": "F15B-GITHUB-KNOWN-GOOD-20260815-V15-GSU-NPSI-1",
+  "expected_host_branch": "integration/test-matchmaking-gsu-npsi-v15",
+  "expected_host_build": "build_pairing_gsu_npsi_v15.rs",
   "attestation_gate_port": 48216
 }
