@@ -75,7 +75,7 @@ jobs:
             'diagnostic-run.ps1',
             'collect-evidence-v15.ps1" -DiagPath',
             'goto :finalize',
-            'V15 EXACT-ATTEMPT',
+            'FIFA 15 F15B v15 exact-attempt diagnostic',
             'FIFA15-F15B-EVIDENCE-'
           )) {
             if (-not $bat.Contains($marker)) { throw "RUN BAT missing v15 marker: $marker" }
