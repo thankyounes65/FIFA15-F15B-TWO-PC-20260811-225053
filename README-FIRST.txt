@@ -1,6 +1,19 @@
 FIFA 15 TWO-PC TEST - REMOTE PLAYER f15b
 ========================================
 
+CURRENT MATCHMAKING RUNTIME - 2026-08-15
+Player B is the dedicated portable repo/package for:
+
+  Candidate: FIFA15-MM-V14-0X0B
+  Player A: integration/test-matchmaking-session-completion-0x0b-v14
+  Package token: F15B-GITHUB-KNOWN-GOOD-20260811-V14-0X0B-1
+
+Use a FRESH GitHub ZIP of this repo's main branch and extract it normally.
+A Git clone / .git directory is NOT required. RUN-FIFA15-F15B.bat validates
+APPLIANCE-CONFIG.json + PACKAGE-MANIFEST.json and completes the exact candidate
+handshake with Player A before FIFA is touched. An old v13 package cannot pass
+the v14 package-token gate.
+
 CURRENT PRESERVATION MILESTONE
 This package has now been proven on a real remote x64 Windows PC through:
 
@@ -12,7 +25,7 @@ This package has now been proven on a real remote x64 Windows PC through:
   -> Online Single Match
   -> two-player matchmaking pairing with the host
 
-The remaining active work is AFTER pairing (GameSetup -> real peer mesh/gameplay).
+The remaining active work is AFTER pairing (GameSetup -> real peer mesh/gameplay/session completion).
 Do not change Player B game files for a host-side matchmaking experiment unless the runtime test
 explicitly requires it.
 
@@ -97,12 +110,13 @@ After FIFA/module attach, the package follows the proven timing:
 Only after the launcher says FIFA 15 is ready should you navigate the game.
 
 RUN
-1. thankyounes starts the coordinator-selected RUN-TWO-PC-HOST.bat and leaves it running.
-2. Double-click RUN-FIFA15-F15B.bat and approve the administrator prompt.
+1. On Player A, start the Universal Tester v14 Matchmaking runtime and leave it at the peer gate.
+2. Double-click RUN-FIFA15-F15B.bat in this fresh extracted Player B folder and approve the administrator prompt.
 3. Complete Tailscale browser login with YOUR OWN account only if requested.
-4. Wait for all automated preflight, EA readiness, routing, forwarder and CA checks.
-5. Follow the current host runtime test's FIFA actions.
-6. Close FIFA when that scenario is finished. Cleanup is automatic.
+4. Require the v14 package self-test and A/B candidate handshake to PASS before FIFA starts.
+5. Wait for all automated preflight, EA readiness, routing, forwarder and CA checks.
+6. Follow the current host runtime test's FIFA actions.
+7. Close FIFA when that scenario is finished. Cleanup is automatic.
 
 IF FIFA IS NOT AUTO-DETECTED
 Select the real fifa15.exe in the file picker. Non-standard paths are supported; the executable hash
