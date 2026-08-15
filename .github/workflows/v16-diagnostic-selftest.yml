@@ -39,16 +39,25 @@ jobs:
             'FIFA15-MM-V16-B-NATIVE-HANDOFF',
             'F15B-GITHUB-DIAGNOSTIC-20260815-V16-NATIVE-HANDOFF-1',
             '53dbaafb32030d6790beb0c16d336acd68cc1d49',
-            'matchmaking-v16-native-handoff-attest.ps1',
-            'classify-network-observer-v16.ps1',
-            'collect-evidence-v16.ps1',
+            'matchmaking-v16-native-handoff-attest.ps1" -OutputPath "!NATIVE_PATH!"',
+            'fifa15-f15b-network-observer.json',
+            'classify-network-observer-v16.ps1" -LogPath "!NETWORK_PATH!"',
+            'collect-evidence-v16.ps1" -DiagPath "!DIAG_PATH!" -NetworkPath "!NETWORK_PATH!" -NativePath "!NATIVE_PATH!"',
             'native_execution_probe=false'
           )) { if (-not $launcher.Contains($marker)) { throw "launcher missing $marker" } }
+          if ($launcher.Contains('-Stop -AppendToNewestDiag')) { throw 'v16 launcher must not bind observer evidence to newest diagnostic' }
           if ($launcher -match 'if errorlevel 1 set .*& goto') { throw 'unsafe one-line IF/goto form returned' }
+          $collector = Get-Content -LiteralPath 'collect-evidence-v16.ps1' -Raw
+          foreach ($marker in @('NetworkPath','NativePath','EXPLICIT_ATTEMPT_PATHS_NO_NEWEST_FILE_HEURISTIC')) {
+            if (-not $collector.Contains($marker)) { throw "collector missing $marker" }
+          }
+          if ($collector.Contains('AddMinutes(-1)') -or $collector.Contains('Sort-Object LastWriteTimeUtc -Descending')) {
+            throw 'collector contains stale newest-file heuristic'
+          }
           $rootLauncher = Get-Content -LiteralPath 'RUN-FIFA15-F15B.bat' -Raw
           if (-not $rootLauncher.Contains('RUN-FIFA15-F15B-V16.bat')) { throw 'root launcher does not route to v16' }
           $manifest = Get-Content -LiteralPath 'PACKAGE-MANIFEST.json' -Raw | ConvertFrom-Json
           if (-not $manifest.matchmaking_overlay.diagnostic_only) { throw 'diagnostic_only not set' }
           if ($manifest.matchmaking_overlay.changes_matchmaking_wire_protocol) { throw 'wire protocol must remain unchanged' }
           if ($manifest.matchmaking_overlay.native_execution_probe) { throw 'package must not claim native execution probing' }
-          Write-Host 'PASS: v16 launcher/package safety contract is internally consistent.'
+          Write-Host 'PASS: v16 launcher/package uses read-only static native attestation and exact-attempt evidence paths with no wire change.'
