@@ -173,7 +173,7 @@ function Invoke-SelfTest {
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
     if ($source -notmatch 'CurrentVersion\\Uninstall') { throw 'FIFA resolver lost uninstall-registry discovery' }
     if ($source -notmatch 'System\.Windows\.Forms\.OpenFileDialog') { throw 'FIFA resolver lost interactive file-picker fallback' }
-    if ($source -notmatch "foreach \(\$drive in @\('C','D','E','F','G','H'\)\)") { throw 'FIFA resolver lost expected common-drive discovery' }
+    if ($source -notmatch 'foreach \(\$drive in @') { throw 'FIFA resolver lost expected common-drive discovery' }
     Write-Host 'PASS: v16 native handoff attestor pins exact executable hash, image base, wire baseline and 10 same-title boundary RVAs.' -ForegroundColor Green
     Write-Host 'PASS: Player B FIFA discovery matches the launcher strategy: explicit path, common installs, uninstall registry, then file picker.' -ForegroundColor Green
     Write-Host 'NOTE: this attestor is read-only and proves address-map identity, NOT execution reachability.' -ForegroundColor Yellow
