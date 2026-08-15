@@ -7,5 +7,9 @@
   "guest_runtime_baseline": "ea-readiness-v1+loopback-forwarder-17502-17503",
   "host_runtime_policy": "coordinator-selected; guest boot/connect package is intentionally independent of host matchmaking branch",
   "historical_source_branch": "integration/test-matchmaking-two-client-pairing-v11",
-  "tailscale_version": "1.102.2"
+  "tailscale_version": "1.102.2",
+  "candidate_id": "FIFA15-MM-V13-V2",
+  "package_attestation": "F15B-GITHUB-KNOWN-GOOD-20260811-V13V2-1",
+  "expected_host_branch": "integration/test-matchmaking-joiner-result-v13-v2",
+  "attestation_gate_port": 48216
 }
