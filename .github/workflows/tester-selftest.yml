@@ -12,10 +12,11 @@ jobs:
       - name: Check out tester package
         uses: actions/checkout@v4
 
-      - name: Run non-invasive package self-tests
+      - name: Run non-invasive v15 package self-tests
         shell: powershell
         run: |
           Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
           if (Test-Path -LiteralPath '.\JOIN.key') { throw 'Public tester HEAD must not contain JOIN.key' }
 
           foreach ($required in @(
@@ -25,10 +26,13 @@ jobs:
             '.\VERIFY-PLAYER-B-GAME-FILES.ps1',
             '.\VERIFY-PLAYER-B-GAME-FILES.bat',
             '.\collect-evidence.ps1',
+            '.\collect-evidence-v15.ps1',
             '.\guest-network-observer.ps1',
-            '.\matchmaking-v13-v2-attest.ps1'
+            '.\diagnostic-run.ps1',
+            '.\matchmaking-v15-gsu-npsi-attest.ps1',
+            '.\RUN-FIFA15-F15B.bat'
           )) {
-            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "missing Player B reconstruction file: $required" }
+            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "missing Player B v15 file: $required" }
           }
 
           $known = Get-Content -LiteralPath '.\PLAYER-B-KNOWN-GOOD.json' -Raw | ConvertFrom-Json
@@ -37,25 +41,52 @@ jobs:
           $forwardPorts = @($known.network.guest_loopback_forwarders | ForEach-Object { [int](($_.local -split ':')[-1]) } | Sort-Object -Unique)
           if ($forwardPorts.Count -ne 2 -or 17502 -notin $forwardPorts -or 17503 -notin $forwardPorts) { throw 'Known-good contract must pin only the two proven guest loopback forward ports' }
 
-          $config = Get-Content -LiteralPath '.\APPLIANCE-CONFIG.json' -Raw | ConvertFrom-Json
-          if ([string]$config.candidate_id -ne 'FIFA15-MM-V13-V2') { throw 'Config lost v13-v2 candidate id' }
-          if ([string]$config.package_attestation -ne 'F15B-GITHUB-KNOWN-GOOD-20260811-V13V2-1') { throw 'Config lost known-good package attestation' }
-          if ([string]$config.expected_host_branch -ne 'integration/test-matchmaking-joiner-result-v13-v2') { throw 'Config lost expected A branch' }
+          $candidate = 'FIFA15-MM-V15-GSU-NPSI'
+          $package = 'F15B-GITHUB-KNOWN-GOOD-20260815-V15-GSU-NPSI-1'
+          $branch = 'integration/test-matchmaking-gsu-npsi-v15'
+          $build = 'build_pairing_gsu_npsi_v15.rs'
+          $revision = 'ea-readiness-v1+loopback-forwarder-17502-17503+matchmaking-v15-gsu-npsi-evidence1'
 
-          $readme = Get-Content -LiteralPath '.\README-FIRST.txt' -Raw
-          foreach ($marker in @('PLAYER-B-BOOT-AND-CONNECT.md','VERIFY-PLAYER-B-GAME-FILES.bat','F15B_LOOPBACK_FORWARDER_READY','hold that state stable for 10 seconds')) {
-            if (-not $readme.Contains($marker)) { throw "README missing working-state marker: $marker" }
-          }
+          $config = Get-Content -LiteralPath '.\APPLIANCE-CONFIG.json' -Raw | ConvertFrom-Json
+          if ([string]$config.candidate_id -ne $candidate) { throw 'Config lost v15 candidate id' }
+          if ([string]$config.package_attestation -ne $package) { throw 'Config lost v15 package attestation' }
+          if ([string]$config.expected_host_branch -ne $branch) { throw 'Config lost expected v15 A branch' }
+          if ([string]$config.expected_host_build -ne $build) { throw 'Config lost expected v15 A build' }
+          if ([int]$config.attestation_gate_port -ne 48216) { throw 'Config lost candidate gate port 48216' }
+
+          $manifest = Get-Content -LiteralPath '.\PACKAGE-MANIFEST.json' -Raw | ConvertFrom-Json
+          if ([string]$manifest.package_revision -ne $revision) { throw 'Manifest lost v15 package revision' }
+          if ([string]$manifest.matchmaking_overlay.candidate_id -ne $candidate) { throw 'Manifest candidate mismatch' }
+          if ([string]$manifest.matchmaking_overlay.package_attestation -ne $package) { throw 'Manifest package mismatch' }
+          if ([string]$manifest.matchmaking_overlay.expected_host_branch -ne $branch) { throw 'Manifest branch mismatch' }
+          if ([string]$manifest.matchmaking_overlay.expected_host_build -ne $build) { throw 'Manifest build mismatch' }
+          if (-not [bool]$manifest.matchmaking_overlay.exact_attempt_evidence_binding) { throw 'Manifest must require exact-attempt evidence binding' }
+          if ([bool]$manifest.matchmaking_overlay.requires_git_checkout) { throw 'Portable Player B package must not require .git' }
 
           $bat = Get-Content -LiteralPath '.\RUN-FIFA15-F15B.bat' -Raw
-          if ($bat -notmatch 'tailscale-bootstrap\.ps1') { throw 'RUN BAT must bootstrap missing Tailscale' }
-          if ($bat -notmatch 'loopback-relay-forwarder\.ps1.*-Start') { throw 'RUN BAT must start the remote QoS/FUT loopback forwarder' }
-          if ($bat -notmatch 'matchmaking-v13-v2-attest\.ps1') { throw 'RUN BAT must attest the v13-v2 candidate before FIFA' }
-          if ($bat -notmatch 'guest-network-observer\.ps1.*-Start') { throw 'RUN BAT must arm the passive LSX/Blaze observer before FIFA' }
-          if ($bat -notmatch 'guest-network-observer\.ps1.*-Stop.*-AppendToNewestDiag') { throw 'RUN BAT must append LSX/Blaze observation to the diagnostic evidence' }
-          if ($bat -notmatch 'diagnostic-run\.ps1') { throw 'RUN BAT must enter through diagnostic-run.ps1' }
-          if ($bat -notmatch 'collect-evidence\.ps1') { throw 'RUN BAT must create the one-file Player B evidence bundle' }
-          if ($bat -notmatch 'FIFA15-F15B-EVIDENCE-') { throw 'RUN BAT must tell Player B to send the evidence ZIP' }
+          foreach ($marker in @(
+            $candidate,
+            $package,
+            $branch,
+            $build,
+            'matchmaking-v15-gsu-npsi-attest.ps1',
+            'guest-network-observer.ps1" -Start',
+            'guest-network-observer.ps1" -Stop -AppendToNewestDiag',
+            'diagnostic-run.ps1',
+            'collect-evidence-v15.ps1" -DiagPath',
+            'goto :finalize',
+            'V15 EXACT-ATTEMPT',
+            'FIFA15-F15B-EVIDENCE-'
+          )) {
+            if (-not $bat.Contains($marker)) { throw "RUN BAT missing v15 marker: $marker" }
+          }
+          if ($bat.Contains('FIFA15-MM-V14-0X0B')) { throw 'RUN BAT retained stale v14 candidate' }
+          if ($bat.Contains('matchmaking-v14-0x0b-attest.ps1')) { throw 'RUN BAT retained stale v14 attestation' }
+
+          $binder = Get-Content -LiteralPath '.\collect-evidence-v15.ps1' -Raw
+          foreach ($marker in @('collection_bound_diag','LastWriteTimeUtc','collect-evidence.ps1','-DesktopPath')) {
+            if (-not $binder.Contains($marker)) { throw "v15 evidence binder missing marker: $marker" }
+          }
 
           .\VERIFY-PLAYER-B-GAME-FILES.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -63,7 +94,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\tailscale-preflight.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\matchmaking-v13-v2-attest.ps1 -SelfTest
+          .\matchmaking-v15-gsu-npsi-attest.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\loopback-relay-forwarder.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -81,6 +112,8 @@ jobs:
           .\diagnostic-run.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\collect-evidence.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\collect-evidence-v15.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\launch-safe.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
