@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(ParameterSetName='Collect', Mandatory=$true)][string]$DiagPath,
+    [Parameter(ParameterSetName='Collect')][string]$NetworkPath,
+    [Parameter(ParameterSetName='Collect')][string]$NativePath,
     [Parameter(ParameterSetName='SelfTest', Mandatory=$true)][switch]$SelfTest
 )
 
@@ -9,22 +11,23 @@ Set-StrictMode -Version 2
 $Root = Split-Path -Parent $PSCommandPath
 $V15Collector = Join-Path $Root 'collect-evidence-v15.ps1'
 
-function Get-DiagStartedUtc([string]$Path) {
-    $line = Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue | Where-Object { $_ -like 'started_utc=*' } | Select-Object -First 1
-    if ($line) {
-        $value = $line.Substring('started_utc='.Length).Trim()
-        $parsed = [datetime]::MinValue
-        if ([datetime]::TryParse($value,[ref]$parsed)) { return $parsed.ToUniversalTime() }
-    }
-    return (Get-Item -LiteralPath $Path).CreationTimeUtc
+function Get-PointerFromDiag([string]$Path,[string]$Key) {
+    $prefix = $Key + '='
+    $line = @(Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue | Where-Object { $_.Trim().StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase) } | Select-Object -Last 1)
+    if ($line.Count -ne 1) { return $null }
+    $value = $line[0].Trim().Substring($prefix.Length).Trim()
+    if (-not $value -or $value -eq '<missing>') { return $null }
+    return $value
 }
 
-function Find-CurrentFile([string]$Desktop,[string]$Filter,[datetime]$SinceUtc) {
-    $hit = @(Get-ChildItem -LiteralPath $Desktop -Filter $Filter -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.LastWriteTimeUtc -ge $SinceUtc.AddMinutes(-1) } |
-        Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1)
-    if ($hit.Count -eq 1) { return $hit[0] }
-    return $null
+function Resolve-ExactFile([string]$Path,[string]$Desktop,[string]$Pattern,[string]$Label) {
+    if (-not $Path) { return $null }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $resolved = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
+    $item = Get-Item -LiteralPath $resolved -ErrorAction Stop
+    if ($item.Directory.FullName -ne $Desktop) { throw "$Label escaped Desktop evidence directory: $resolved" }
+    if ($item.Name -notlike $Pattern) { throw "$Label has unexpected filename: $resolved" }
+    return $item
 }
 
 function Invoke-SelfTest {
@@ -33,10 +36,13 @@ function Invoke-SelfTest {
     [Management.Automation.Language.Parser]::ParseFile($PSCommandPath,[ref]$tokens,[ref]$errors) | Out-Null
     if ($errors -and $errors.Count -gt 0) { throw (($errors | ForEach-Object Message) -join '; ') }
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
-    foreach ($marker in @('FIFA15-F15B-NETWORK-*.log','FIFA15-F15B-NATIVE-V16-*.log','Compress-Archive','V16 EXACT-ATTEMPT EVIDENCE BINDING')) {
+    foreach ($marker in @('NetworkPath','NativePath','network_observer_log','native_attestation_log','Resolve-ExactFile','V16 EXACT-ATTEMPT EVIDENCE BINDING','Compress-Archive')) {
         if (-not $source.Contains($marker)) { throw "missing v16 evidence marker: $marker" }
     }
-    Write-Host 'PASS: v16 evidence binder requires exact diagnostic and adds the same-attempt network/native diagnostic files to the ZIP.' -ForegroundColor Green
+    if ($source.Contains('AddMinutes(-1)') -or $source.Contains('Sort-Object LastWriteTimeUtc -Descending')) {
+        throw 'heuristic newest-file evidence selection returned'
+    }
+    Write-Host 'PASS: v16 evidence binder accepts explicit exact-attempt network/native paths and contains no newest-file time-window heuristic.' -ForegroundColor Green
 }
 
 if ($SelfTest) { Invoke-SelfTest; exit 0 }
@@ -45,10 +51,12 @@ $resolved = (Resolve-Path -LiteralPath $DiagPath -ErrorAction Stop).Path
 $item = Get-Item -LiteralPath $resolved -ErrorAction Stop
 if ($item.PSIsContainer -or $item.Name -notlike 'FIFA15-F15B-DIAG-*.txt') { throw "Unexpected diagnostic path: $resolved" }
 $desktop = $item.Directory.FullName
-$sinceUtc = Get-DiagStartedUtc $resolved
 $stamp = [IO.Path]::GetFileNameWithoutExtension($item.Name).Substring('FIFA15-F15B-DIAG-'.Length)
-$network = Find-CurrentFile -Desktop $desktop -Filter 'FIFA15-F15B-NETWORK-*.log' -SinceUtc $sinceUtc
-$native = Find-CurrentFile -Desktop $desktop -Filter 'FIFA15-F15B-NATIVE-V16-*.log' -SinceUtc $sinceUtc
+
+if (-not $NetworkPath) { $NetworkPath = Get-PointerFromDiag -Path $resolved -Key 'network_observer_log' }
+if (-not $NativePath) { $NativePath = Get-PointerFromDiag -Path $resolved -Key 'native_attestation_log' }
+$network = Resolve-ExactFile -Path $NetworkPath -Desktop $desktop -Pattern 'FIFA15-F15B-NETWORK-*.log' -Label 'network log'
+$native = Resolve-ExactFile -Path $NativePath -Desktop $desktop -Pattern 'FIFA15-F15B-NATIVE-V16-*.log' -Label 'native attestation log'
 
 Add-Content -LiteralPath $resolved -Encoding UTF8 -Value @(
     '',
@@ -56,6 +64,7 @@ Add-Content -LiteralPath $resolved -Encoding UTF8 -Value @(
     "collection_bound_diag=$resolved",
     "network_log=$([string]$(if($network){$network.FullName}else{'<missing>'}))",
     "native_attestation_log=$([string]$(if($native){$native.FullName}else{'<missing>'}))",
+    'evidence_selection_policy=EXPLICIT_ATTEMPT_PATHS_NO_NEWEST_FILE_HEURISTIC',
     "collection_bound_utc=$((Get-Date).ToUniversalTime().ToString('o'))"
 )
 
@@ -70,6 +79,7 @@ $meta = Join-Path $env:TEMP "FIFA15-F15B-V16-EVIDENCE-META-$stamp.txt"
     'FIFA 15 Player B v16 diagnostic evidence manifest',
     "generated_utc=$((Get-Date).ToUniversalTime().ToString('o'))",
     "diag=$resolved",
+    'evidence_selection_policy=EXPLICIT_ATTEMPT_PATHS_NO_NEWEST_FILE_HEURISTIC',
     "network_found=$([bool]$network)",
     "network_path=$([string]$(if($network){$network.FullName}else{'<missing>'}))",
     "native_attestation_found=$([bool]$native)",
@@ -84,7 +94,7 @@ foreach ($path in $extra) {
 }
 Remove-Item -LiteralPath $meta -Force -ErrorAction SilentlyContinue
 
-Write-Host "PASS: v16 evidence ZIP includes exact diagnostic plus same-attempt network/native evidence: $zipPath" -ForegroundColor Green
-if (-not $network) { Write-Host 'WARNING: no same-attempt network log was found; runtime result may be VOID.' -ForegroundColor Yellow }
-if (-not $native) { Write-Host 'WARNING: no same-attempt native attestation log was found; runtime result may be VOID.' -ForegroundColor Yellow }
+Write-Host "PASS: v16 evidence ZIP includes exact diagnostic plus explicitly bound network/native evidence: $zipPath" -ForegroundColor Green
+if (-not $network) { Write-Host 'WARNING: exact-attempt network log was missing; runtime result may be VOID.' -ForegroundColor Yellow }
+if (-not $native) { Write-Host 'WARNING: exact-attempt native attestation log was missing; runtime result may be VOID.' -ForegroundColor Yellow }
 exit 0
