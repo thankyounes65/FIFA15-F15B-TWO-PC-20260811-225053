@@ -1,9 +1,9 @@
 {
   "format": 3,
-  "package_revision": "ea-readiness-v1+promotion-notification-v12+demangler-no-frida+loopback-forwarder-3658-17502-17503",
-  "runtime_branch": "integration/test-matchmaking-b-promotion-notification-v12",
+  "package_revision": "ea-readiness-v1+joiner-result-v13+demangler-no-frida+loopback-forwarder-3658-17502-17503",
+  "runtime_branch": "integration/test-matchmaking-b-joiner-result-v13",
   "role": "f15b",
-  "note": "Player B package paired specifically with host matchmaking promotion-notification bundle v12. Behavior is intentionally unchanged from the proven no-Frida postmesh-gsu-v5 appliance: exact-state restoration, local LSX, EA readiness, CA write/readback, ProtoMangle/QoS/FUT loopback forwarding and passive network evidence. Host v12 owns the only matchmaking delta: promotion-time JoinCompleted for the ACTIVE_CONNECTED joiner is delivered bilaterally.",
+  "note": "Player B package paired specifically with host matchmaking joiner-result v13. Behavior is intentionally unchanged from the proven no-Frida v12 appliance: exact-state restoration, local LSX, EA readiness, CA write/readback, ProtoMangle/QoS/FUT loopback forwarding and passive network evidence. Host v13 owns the only client-visible matchmaking delta: Player A/host receives REAS.RSLT=0 SUCCESS_CREATED_GAME while Player B/joiner receives REAS.RSLT=1 SUCCESS_JOINED_NEW_GAME. Retained v12 bilateral promotion-time JoinCompleted remains active.",
   "documentation_files": ["README-FIRST.txt","PLAYER-B-BOOT-AND-CONNECT.md","PLAYER-B-KNOWN-GOOD.json","RUNTIME-TEST.md"],
   "verification_files": ["VERIFY-PLAYER-B-GAME-FILES.bat","VERIFY-PLAYER-B-GAME-FILES.ps1","runtime-package-preflight.ps1","demangler-preflight.ps1","guest-network-observer.ps1"],
   "runtime_features": {
@@ -16,7 +16,7 @@
     "host_ready_port": 48215,
     "host_preflight_port": 42127,
     "in_process_fifa_instrumentation": false,
-    "paired_host_branch": "integration/test-matchmaking-promotion-notification-bundle-v12"
+    "paired_host_branch": "integration/test-matchmaking-joiner-result-v13"
   },
   "binary_files": [
     {"name":"ca_modulus_1024.bin","bytes":128,"sha256":"5A6C7E9A1DAF98099BBE5C97C4ABD5FE6315FDDA4439F77A18635EE56C146A3A"},
