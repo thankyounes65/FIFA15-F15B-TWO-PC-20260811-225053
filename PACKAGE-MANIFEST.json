@@ -1,11 +1,11 @@
 {
   "format": 4,
-  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503+matchmaking-v16-native-handoff-diagnostic1",
+  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503+matchmaking-v16-native-handoff-diagnostic2",
   "role": "f15b",
-  "note": "Diagnostic-only Player B package for FIFA15-MM-V16-B-NATIVE-HANDOFF. The proven physical Player B boot/connect stack and exact tested v15 relay wire behavior are retained. v16 fixes network-observer result classification, binds network/native logs into the exact-attempt evidence ZIP, and performs read-only static PE/hash/RVA attestation. It does not attach a debugger, hook FIFA, patch gameplay code, or claim execution reachability from the static attestation.",
+  "note": "Diagnostic-only Player B package for FIFA15-MM-V16-B-NATIVE-HANDOFF. The proven physical Player B boot/connect stack and exact tested v15 relay wire behavior are retained. v16 fixes network-observer result classification, binds network/native logs into the exact-attempt evidence ZIP, performs read-only static PE/hash/RVA attestation, and robustly resolves non-standard FIFA 15 install locations before attestation. It does not attach a debugger, hook FIFA, patch gameplay code, or claim execution reachability from the static attestation.",
   "matchmaking_overlay": {
     "candidate_id": "FIFA15-MM-V16-B-NATIVE-HANDOFF",
-    "package_attestation": "F15B-GITHUB-DIAGNOSTIC-20260815-V16-NATIVE-HANDOFF-1",
+    "package_attestation": "F15B-GITHUB-DIAGNOSTIC-20260815-V16-NATIVE-HANDOFF-2",
     "expected_host_branch": "integration/test-matchmaking-b-native-handoff-v16",
     "expected_host_build": "build_pairing_gsu_npsi_v15.rs",
     "wire_protocol_baseline_commit": "53dbaafb32030d6790beb0c16d336acd68cc1d49",
