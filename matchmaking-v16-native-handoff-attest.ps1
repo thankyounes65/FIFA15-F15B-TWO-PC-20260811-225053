@@ -47,24 +47,66 @@ function Read-Contract {
     if (-not [bool]$manifest.matchmaking_overlay.diagnostic_only) { throw 'PACKAGE-MANIFEST must declare diagnostic_only=true' }
 }
 
+function Select-FifaExeInteractive {
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        $dialog = New-Object System.Windows.Forms.OpenFileDialog
+        $dialog.Title = 'Select your FIFA 15 fifa15.exe'
+        $dialog.Filter = 'FIFA 15 (fifa15.exe)|fifa15.exe|All files (*.*)|*.*'
+        $dialog.CheckFileExists = $true
+        if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            if ([IO.Path]::GetFileName($dialog.FileName).Equals('fifa15.exe',[StringComparison]::OrdinalIgnoreCase)) {
+                return [IO.Path]::GetFullPath($dialog.FileName)
+            }
+        }
+    } catch {}
+    return $null
+}
+
 function Resolve-FifaExe {
-    $dirs = New-Object Collections.Generic.List[string]
-    if ($GameDir) { $dirs.Add($GameDir) }
-    if ($env:FIFA15_GAME_DIR) { $dirs.Add($env:FIFA15_GAME_DIR) }
-    foreach ($p in @(
-        'C:\Program Files (x86)\Origin Games\FIFA 15',
-        'C:\Program Files\EA Games\FIFA 15',
-        'C:\Program Files (x86)\EA Games\FIFA 15',
-        'C:\Games\FIFA 15','D:\Games\FIFA 15','E:\Games\FIFA 15','F:\Games\FIFA 15','G:\Games\FIFA 15'
-    )) { $dirs.Add($p) }
-    foreach ($dir in $dirs) {
+    $candidates = New-Object Collections.Generic.List[string]
+
+    foreach ($dir in @($GameDir,$env:FIFA15_GAME_DIR)) {
+        if ($dir) {
+            try { $candidates.Add((Join-Path ([IO.Path]::GetFullPath($dir)) 'fifa15.exe')) } catch {}
+        }
+    }
+
+    foreach ($base in @($env:ProgramFiles,${env:ProgramFiles(x86)})) {
+        if ($base) {
+            $candidates.Add((Join-Path $base 'EA Games\FIFA 15\fifa15.exe'))
+            $candidates.Add((Join-Path $base 'Origin Games\FIFA 15\fifa15.exe'))
+        }
+    }
+    foreach ($drive in @('C','D','E','F','G','H')) {
+        foreach ($relative in @('Games\FIFA 15\fifa15.exe','EA Games\FIFA 15\fifa15.exe','Origin Games\FIFA 15\fifa15.exe','FIFA 15\fifa15.exe')) {
+            $candidates.Add("$drive`:\$relative")
+        }
+    }
+    foreach ($path in $candidates) {
         try {
-            $full = [IO.Path]::GetFullPath($dir)
-            $exe = Join-Path $full 'fifa15.exe'
-            if (Test-Path -LiteralPath $exe -PathType Leaf) { return $exe }
+            if (Test-Path -LiteralPath $path -PathType Leaf) { return (Resolve-Path -LiteralPath $path).Path }
         } catch {}
     }
-    throw 'Could not auto-resolve the exact Player B fifa15.exe. Set FIFA15_GAME_DIR or use -GameDir; FIFA was not started.'
+
+    foreach ($key in @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )) {
+        try {
+            foreach ($hit in @(Get-ItemProperty $key -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like '*FIFA 15*' })) {
+                if (-not $hit.InstallLocation) { continue }
+                $path = Join-Path ([string]$hit.InstallLocation) 'fifa15.exe'
+                if (Test-Path -LiteralPath $path -PathType Leaf) { return (Resolve-Path -LiteralPath $path).Path }
+            }
+        } catch {}
+    }
+
+    Write-Host 'FIFA 15 was not found automatically. Select the exact Player B fifa15.exe in the file picker.' -ForegroundColor Yellow
+    $selected = Select-FifaExeInteractive
+    if ($selected) { return $selected }
+
+    throw 'Could not resolve the exact Player B fifa15.exe automatically and no file was selected. FIFA was not started.'
 }
 
 function Read-PeLayout([string]$Path) {
@@ -128,7 +170,12 @@ function Invoke-SelfTest {
     if ($Targets.MM_VALIDATED_DISPATCH_0B -ne 0x04859E69) { throw '0x0B dispatcher RVA drifted' }
     if ($Targets.MM_SESSION_SUCCESS_BRIDGE -ne 0x034A5CF0) { throw 'MatchSession success bridge RVA drifted' }
     if ($Targets.PRE_GAME_STATE -ne 0x047DDFF3) { throw 'PRE_GAME state RVA drifted' }
+    $source = Get-Content -LiteralPath $PSCommandPath -Raw
+    if ($source -notmatch 'CurrentVersion\\Uninstall') { throw 'FIFA resolver lost uninstall-registry discovery' }
+    if ($source -notmatch 'System\.Windows\.Forms\.OpenFileDialog') { throw 'FIFA resolver lost interactive file-picker fallback' }
+    if ($source -notmatch "foreach \(\$drive in @\('C','D','E','F','G','H'\)\)") { throw 'FIFA resolver lost expected common-drive discovery' }
     Write-Host 'PASS: v16 native handoff attestor pins exact executable hash, image base, wire baseline and 10 same-title boundary RVAs.' -ForegroundColor Green
+    Write-Host 'PASS: Player B FIFA discovery matches the launcher strategy: explicit path, common installs, uninstall registry, then file picker.' -ForegroundColor Green
     Write-Host 'NOTE: this attestor is read-only and proves address-map identity, NOT execution reachability.' -ForegroundColor Yellow
 }
 
