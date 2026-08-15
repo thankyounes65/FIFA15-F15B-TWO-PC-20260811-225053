@@ -27,6 +27,15 @@ if not "%FWDRC%"=="0" (
 )
 
 echo.
+echo Verifying FIFA15-MM-V13-V2 candidate agreement with Player A before FIFA is touched...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0matchmaking-v13-v2-attest.ps1" -SelfTest
+set "ATTSELFRC=%ERRORLEVEL%"
+if not "%ATTSELFRC%"=="0" goto :candidate_preflight_failed
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0matchmaking-v13-v2-attest.ps1"
+set "ATTRC=%ERRORLEVEL%"
+if not "%ATTRC%"=="0" goto :candidate_preflight_failed
+
+echo.
 echo Verifying the read-only Player B LSX/Blaze network observer...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -SelfTest
 set "OBSSELFRC=%ERRORLEVEL%"
@@ -88,6 +97,15 @@ if not "%RC%"=="0" (
   echo Send the newest FIFA15-F15B-EVIDENCE-*.zip from your Desktop to thankyounes.
 )
 exit /b %RC%
+
+:candidate_preflight_failed
+echo.
+echo PLAYER B V13-V2 CANDIDATE PREFLIGHT FAILED - FIFA WAS NOT LAUNCHED.
+echo Start the Player A integration/test-matchmaking-joiner-result-v13-v2 runtime first.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1" -Cleanup
+pause
+exit /b 1
 
 :guest_preflight_failed
 echo.
