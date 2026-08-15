@@ -51,7 +51,7 @@ jobs:
           foreach ($marker in @('NetworkPath','NativePath','EXPLICIT_ATTEMPT_PATHS_NO_NEWEST_FILE_HEURISTIC')) {
             if (-not $collector.Contains($marker)) { throw "collector missing $marker" }
           }
-          if ($collector.Contains('AddMinutes(-1)') -or $collector.Contains('Sort-Object LastWriteTimeUtc -Descending')) {
+          if ($collector.Contains('Find-CurrentFile') -or $collector.Contains('LastWriteTimeUtc -ge')) {
             throw 'collector contains stale newest-file heuristic'
           }
           $rootLauncher = Get-Content -LiteralPath 'RUN-FIFA15-F15B.bat' -Raw
