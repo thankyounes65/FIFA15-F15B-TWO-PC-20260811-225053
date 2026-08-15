@@ -1,0 +1,23 @@
+name: Matchmaking v15 A overlay transform self-test
+
+on:
+  push:
+    branches:
+      - ci/v15-a-overlay-preflight-20260815
+  workflow_dispatch:
+
+jobs:
+  transform:
+    runs-on: windows-latest
+    steps:
+      - name: Check out fixture branch
+        uses: actions/checkout@v4
+
+      - name: Compile and execute v15 transform fixture
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          rustc --edition=2024 .\ci\v15-transform-selftest.rs -o .\ci\v15-transform-selftest.exe
+          if ($LASTEXITCODE -ne 0) { throw 'v15 transform fixture failed to compile.' }
+          & .\ci\v15-transform-selftest.exe
+          if ($LASTEXITCODE -ne 0) { throw 'v15 transform fixture failed.' }
