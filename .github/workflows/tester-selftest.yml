@@ -25,7 +25,8 @@ jobs:
             '.\VERIFY-PLAYER-B-GAME-FILES.ps1',
             '.\VERIFY-PLAYER-B-GAME-FILES.bat',
             '.\collect-evidence.ps1',
-            '.\guest-network-observer.ps1'
+            '.\guest-network-observer.ps1',
+            '.\matchmaking-v13-v2-attest.ps1'
           )) {
             if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "missing Player B reconstruction file: $required" }
           }
@@ -36,6 +37,11 @@ jobs:
           $forwardPorts = @($known.network.guest_loopback_forwarders | ForEach-Object { [int](($_.local -split ':')[-1]) } | Sort-Object -Unique)
           if ($forwardPorts.Count -ne 2 -or 17502 -notin $forwardPorts -or 17503 -notin $forwardPorts) { throw 'Known-good contract must pin only the two proven guest loopback forward ports' }
 
+          $config = Get-Content -LiteralPath '.\APPLIANCE-CONFIG.json' -Raw | ConvertFrom-Json
+          if ([string]$config.candidate_id -ne 'FIFA15-MM-V13-V2') { throw 'Config lost v13-v2 candidate id' }
+          if ([string]$config.package_attestation -ne 'F15B-GITHUB-KNOWN-GOOD-20260811-V13V2-1') { throw 'Config lost known-good package attestation' }
+          if ([string]$config.expected_host_branch -ne 'integration/test-matchmaking-joiner-result-v13-v2') { throw 'Config lost expected A branch' }
+
           $readme = Get-Content -LiteralPath '.\README-FIRST.txt' -Raw
           foreach ($marker in @('PLAYER-B-BOOT-AND-CONNECT.md','VERIFY-PLAYER-B-GAME-FILES.bat','F15B_LOOPBACK_FORWARDER_READY','hold that state stable for 10 seconds')) {
             if (-not $readme.Contains($marker)) { throw "README missing working-state marker: $marker" }
@@ -44,6 +50,7 @@ jobs:
           $bat = Get-Content -LiteralPath '.\RUN-FIFA15-F15B.bat' -Raw
           if ($bat -notmatch 'tailscale-bootstrap\.ps1') { throw 'RUN BAT must bootstrap missing Tailscale' }
           if ($bat -notmatch 'loopback-relay-forwarder\.ps1.*-Start') { throw 'RUN BAT must start the remote QoS/FUT loopback forwarder' }
+          if ($bat -notmatch 'matchmaking-v13-v2-attest\.ps1') { throw 'RUN BAT must attest the v13-v2 candidate before FIFA' }
           if ($bat -notmatch 'guest-network-observer\.ps1.*-Start') { throw 'RUN BAT must arm the passive LSX/Blaze observer before FIFA' }
           if ($bat -notmatch 'guest-network-observer\.ps1.*-Stop.*-AppendToNewestDiag') { throw 'RUN BAT must append LSX/Blaze observation to the diagnostic evidence' }
           if ($bat -notmatch 'diagnostic-run\.ps1') { throw 'RUN BAT must enter through diagnostic-run.ps1' }
@@ -55,6 +62,8 @@ jobs:
           .\tailscale-bootstrap.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\tailscale-preflight.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\matchmaking-v13-v2-attest.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\loopback-relay-forwarder.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
