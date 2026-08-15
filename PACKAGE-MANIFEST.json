@@ -1,8 +1,15 @@
 {
   "format": 3,
-  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503",
+  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503+matchmaking-v13-v2-attest1",
   "role": "f15b",
-  "note": "Proven physical Player B package: tester-owned Tailscale account + shared host; exact-state restoration; package LSX on 127.0.0.1:3216; full EA App readiness gate stable for 10 seconds; 500 ms direct CA write/readback; transparent loopback forwarding of only QoS 17502 and FUT REST 17503. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records their observed hashes/provenance.",
+  "note": "Proven physical Player B package retained unchanged for Tailscale/LSX/EA-readiness/TLS/QoS/FUT routing. FIFA15-MM-V13-V2 adds only a fail-closed pre-launch candidate attestation to Player A on TCP/48216. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records their observed hashes/provenance.",
+  "matchmaking_overlay": {
+    "candidate_id": "FIFA15-MM-V13-V2",
+    "package_attestation": "F15B-GITHUB-KNOWN-GOOD-20260811-V13V2-1",
+    "expected_host_branch": "integration/test-matchmaking-joiner-result-v13-v2",
+    "gate_port": 48216,
+    "changes_guest_boot_stack": false
+  },
   "documentation_files": [
     "README-FIRST.txt",
     "PLAYER-B-BOOT-AND-CONNECT.md",
@@ -10,7 +17,8 @@
   ],
   "verification_files": [
     "VERIFY-PLAYER-B-GAME-FILES.bat",
-    "VERIFY-PLAYER-B-GAME-FILES.ps1"
+    "VERIFY-PLAYER-B-GAME-FILES.ps1",
+    "matchmaking-v13-v2-attest.ps1"
   ],
   "runtime_features": {
     "exact_restore": "restore-v3",
@@ -19,7 +27,8 @@
     "lsx_local_port": 3216,
     "loopback_forward_ports": [17502, 17503],
     "host_ready_port": 48215,
-    "host_preflight_port": 42127
+    "host_preflight_port": 42127,
+    "matchmaking_candidate_gate_port": 48216
   },
   "binary_files": [
     {
