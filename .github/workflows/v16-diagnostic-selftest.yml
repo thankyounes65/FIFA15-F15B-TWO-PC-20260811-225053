@@ -1,0 +1,54 @@
+name: FIFA15 v16 Player B diagnostic self-test
+
+on:
+  push:
+    branches: [diagnostic/v16-native-handoff-20260815]
+  workflow_dispatch:
+
+jobs:
+  diagnostic-contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse and self-test v16 PowerShell diagnostics
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          $scripts = @(
+            'matchmaking-v16-candidate-attest.ps1',
+            'matchmaking-v16-native-handoff-attest.ps1',
+            'classify-network-observer-v16.ps1',
+            'collect-evidence-v16.ps1',
+            'guest-network-observer.ps1'
+          )
+          foreach ($script in $scripts) {
+            $tokens=$null; $errors=$null
+            [Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $script),[ref]$tokens,[ref]$errors) | Out-Null
+            if ($errors -and $errors.Count) { throw "$script parse failed: $($errors.Message -join '; ')" }
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PWD $script) -SelfTest
+            if ($LASTEXITCODE -ne 0) { throw "$script self-test failed with $LASTEXITCODE" }
+          }
+      - name: Verify launcher and package safety markers
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          $launcher = Get-Content -LiteralPath 'RUN-FIFA15-F15B-V16.bat' -Raw
+          foreach ($marker in @(
+            'FIFA15-MM-V16-B-NATIVE-HANDOFF',
+            'F15B-GITHUB-DIAGNOSTIC-20260815-V16-NATIVE-HANDOFF-1',
+            '53dbaafb32030d6790beb0c16d336acd68cc1d49',
+            'matchmaking-v16-native-handoff-attest.ps1',
+            'classify-network-observer-v16.ps1',
+            'collect-evidence-v16.ps1',
+            'native_execution_probe=false'
+          )) { if (-not $launcher.Contains($marker)) { throw "launcher missing $marker" } }
+          if ($launcher -match 'if errorlevel 1 set .*& goto') { throw 'unsafe one-line IF/goto form returned' }
+          $rootLauncher = Get-Content -LiteralPath 'RUN-FIFA15-F15B.bat' -Raw
+          if (-not $rootLauncher.Contains('RUN-FIFA15-F15B-V16.bat')) { throw 'root launcher does not route to v16' }
+          $manifest = Get-Content -LiteralPath 'PACKAGE-MANIFEST.json' -Raw | ConvertFrom-Json
+          if (-not $manifest.matchmaking_overlay.diagnostic_only) { throw 'diagnostic_only not set' }
+          if ($manifest.matchmaking_overlay.changes_matchmaking_wire_protocol) { throw 'wire protocol must remain unchanged' }
+          if ($manifest.matchmaking_overlay.native_execution_probe) { throw 'package must not claim native execution probing' }
+          Write-Host 'PASS: v16 launcher/package safety contract is internally consistent.'
