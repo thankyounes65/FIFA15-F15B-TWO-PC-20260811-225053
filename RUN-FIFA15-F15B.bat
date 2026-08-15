@@ -177,5 +177,4 @@ if not "!RC!"=="0" (
   if "!EVIDRC!"=="0" echo Send the newest FIFA15-F15B-EVIDENCE-*.zip from this attempt.
 )
 
-set "FINAL_RC=!RC!"
-endlocal & exit /b %FINAL_RC%
+for %%R in (!RC!) do endlocal & exit /b %%R
