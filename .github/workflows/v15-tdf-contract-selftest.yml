@@ -1,0 +1,59 @@
+name: FIFA15 v15 GSU TDF contract self-test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  tdf-contract:
+    runs-on: windows-latest
+    steps:
+      - name: Compile and execute exact GID plus NPSI serializer contract
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP\v15-tdf\src" -Force | Out-Null
+          @'
+          [package]
+          name = "v15-tdf-contract"
+          version = "0.1.0"
+          edition = "2024"
+
+          [dependencies]
+          tdf = "0.4"
+          '@ | Set-Content -LiteralPath "$env:RUNNER_TEMP\v15-tdf\Cargo.toml" -Encoding UTF8
+          @'
+          #[derive(tdf::prelude::TdfSerialize)]
+          struct Fifa15PairGameSessionUpdated<'a> {
+              #[tdf(tag = "GID")]
+              game_id: u64,
+              #[tdf(tag = "NPSI")]
+              npsi: &'a str,
+          }
+
+          fn main() {
+              let update = Fifa15PairGameSessionUpdated {
+                  game_id: 54_324_593_195_745_281,
+                  npsi: "",
+              };
+              let payload = tdf::serialize_vec(&update);
+              let (text, ok) = tdf::stringify::TdfStringifier::<String>::new_string(
+                  tdf::reader::TdfDeserializer::new(&payload),
+              );
+              assert!(ok, "FIFA15 v15 GSU must decode: {text}");
+              assert!(text.contains("\"GID\": 54324593195745281"), "missing GID: {text}");
+              assert!(text.contains("\"NPSI\": \"\""), "missing empty string NPSI: {text}");
+              assert!(!text.contains("\"XNNC\""), "legacy XNNC leaked into FIFA15 0x73: {text}");
+              assert!(!text.contains("\"XSES\""), "legacy XSES leaked into FIFA15 0x73: {text}");
+              println!("PASS: {text}");
+          }
+          '@ | Set-Content -LiteralPath "$env:RUNNER_TEMP\v15-tdf\src\main.rs" -Encoding UTF8
+          Push-Location "$env:RUNNER_TEMP\v15-tdf"
+          try {
+            cargo run --quiet
+            if ($LASTEXITCODE -ne 0) { throw "v15 TDF contract compile/run failed with $LASTEXITCODE" }
+          } finally {
+            Pop-Location
+          }
