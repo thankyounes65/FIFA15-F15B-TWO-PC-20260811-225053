@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title FIFA 15 Remote Player - f15b - V14 0x0B
+title FIFA 15 Remote Player - f15b
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1"
 set "BOOTRC=%ERRORLEVEL%"
@@ -101,7 +101,8 @@ exit /b %RC%
 :candidate_preflight_failed
 echo.
 echo PLAYER B V14 0x0B CANDIDATE PREFLIGHT FAILED - FIFA WAS NOT LAUNCHED.
-echo Ensure this dedicated Player B repo is on main and fully pulled, then start the Player A integration/test-matchmaking-session-completion-0x0b-v14 runtime first.
+echo Use a fresh download/extraction of the dedicated Player B repo main branch, then start the Player A integration/test-matchmaking-session-completion-0x0b-v14 runtime first.
+echo A Git checkout is NOT required.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1" -Cleanup
 pause
