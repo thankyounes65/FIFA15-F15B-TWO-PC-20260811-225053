@@ -1,19 +1,26 @@
 {
-  "format": 3,
-  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503+matchmaking-v15-gsu-npsi-evidence1",
+  "format": 4,
+  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503+matchmaking-v16-native-handoff-diagnostic1",
   "role": "f15b",
-  "note": "Proven physical Player B boot/connect stack retained for Tailscale/LSX/EA-readiness/TLS/QoS/FUT routing. FIFA15-MM-V15-GSU-NPSI changes the fail-closed candidate attestation to Player A and hardens evidence provenance so each launcher invocation is bound to its own diagnostic/evidence collection even when a prerequisite fails before FIFA. A fresh GitHub ZIP/extracted folder is supported; no .git directory is required. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records their observed hashes/provenance.",
+  "note": "Diagnostic-only Player B package for FIFA15-MM-V16-B-NATIVE-HANDOFF. The proven physical Player B boot/connect stack and exact tested v15 relay wire behavior are retained. v16 fixes network-observer result classification, binds network/native logs into the exact-attempt evidence ZIP, and performs read-only static PE/hash/RVA attestation. It does not attach a debugger, hook FIFA, patch gameplay code, or claim execution reachability from the static attestation.",
   "matchmaking_overlay": {
-    "candidate_id": "FIFA15-MM-V15-GSU-NPSI",
-    "package_attestation": "F15B-GITHUB-KNOWN-GOOD-20260815-V15-GSU-NPSI-1",
-    "expected_host_branch": "integration/test-matchmaking-gsu-npsi-v15",
+    "candidate_id": "FIFA15-MM-V16-B-NATIVE-HANDOFF",
+    "package_attestation": "F15B-GITHUB-DIAGNOSTIC-20260815-V16-NATIVE-HANDOFF-1",
+    "expected_host_branch": "integration/test-matchmaking-b-native-handoff-v16",
     "expected_host_build": "build_pairing_gsu_npsi_v15.rs",
+    "wire_protocol_baseline_commit": "53dbaafb32030d6790beb0c16d336acd68cc1d49",
     "gate_port": 48216,
+    "diagnostic_only": true,
     "changes_guest_boot_stack": false,
+    "changes_matchmaking_wire_protocol": false,
+    "native_execution_probe": false,
+    "native_static_address_map_attestation": true,
     "requires_git_checkout": false,
     "sends_exact_repo_commit": false,
     "portable_extracted_folder_supported": true,
-    "exact_attempt_evidence_binding": true
+    "exact_attempt_evidence_binding": true,
+    "network_log_mandatory_in_bundle": true,
+    "native_attestation_log_mandatory_in_bundle": true
   },
   "documentation_files": [
     "README-FIRST.txt",
@@ -23,8 +30,9 @@
   "verification_files": [
     "VERIFY-PLAYER-B-GAME-FILES.bat",
     "VERIFY-PLAYER-B-GAME-FILES.ps1",
-    "matchmaking-v15-gsu-npsi-attest.ps1",
-    "collect-evidence-v15.ps1"
+    "matchmaking-v16-native-handoff-attest.ps1",
+    "classify-network-observer-v16.ps1",
+    "collect-evidence-v16.ps1"
   ],
   "runtime_features": {
     "exact_restore": "restore-v3",
