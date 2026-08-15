@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title FIFA 15 Remote Player - f15b
+title FIFA 15 Remote Player - f15b - V14 0x0B
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1"
 set "BOOTRC=%ERRORLEVEL%"
@@ -27,11 +27,11 @@ if not "%FWDRC%"=="0" (
 )
 
 echo.
-echo Verifying FIFA15-MM-V13-V2 candidate agreement with Player A before FIFA is touched...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0matchmaking-v13-v2-attest.ps1" -SelfTest
+echo Verifying FIFA15-MM-V14-0X0B candidate agreement with Player A before FIFA is touched...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0matchmaking-v14-0x0b-attest.ps1" -SelfTest
 set "ATTSELFRC=%ERRORLEVEL%"
 if not "%ATTSELFRC%"=="0" goto :candidate_preflight_failed
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0matchmaking-v13-v2-attest.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0matchmaking-v14-0x0b-attest.ps1"
 set "ATTRC=%ERRORLEVEL%"
 if not "%ATTRC%"=="0" goto :candidate_preflight_failed
 
@@ -100,8 +100,8 @@ exit /b %RC%
 
 :candidate_preflight_failed
 echo.
-echo PLAYER B V13-V2 CANDIDATE PREFLIGHT FAILED - FIFA WAS NOT LAUNCHED.
-echo Start the Player A integration/test-matchmaking-joiner-result-v13-v2 runtime first.
+echo PLAYER B V14 0x0B CANDIDATE PREFLIGHT FAILED - FIFA WAS NOT LAUNCHED.
+echo Ensure this dedicated Player B repo is on main and fully pulled, then start the Player A integration/test-matchmaking-session-completion-0x0b-v14 runtime first.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Stop
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1" -Cleanup
 pause
