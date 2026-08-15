@@ -19,12 +19,21 @@ set "TAILSCALE_ATTEMPTED=0"
 
 for /f "usebackq delims=" %%S in (`powershell.exe -NoProfile -Command "Get-Date -Format 'yyyyMMdd-HHmmssfff'"`) do set "RUN_STAMP=%%S"
 for /f "usebackq delims=" %%D in (`powershell.exe -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"`) do set "DESKTOP=%%D"
-if not defined RUN_STAMP endlocal & exit /b 90
-if not defined DESKTOP endlocal & exit /b 91
+if not defined RUN_STAMP (
+  echo ERROR: could not create v16 invocation stamp.
+  endlocal & exit /b 90
+)
+if not defined DESKTOP (
+  echo ERROR: could not resolve Desktop evidence path.
+  endlocal & exit /b 91
+)
 set "DIAG_PATH=!DESKTOP!\FIFA15-F15B-DIAG-!RUN_STAMP!.txt"
 
 powershell.exe -NoProfile -Command "$p=$env:DIAG_PATH; @('FIFA 15 F15B v16 exact-attempt diagnostic','started_utc='+[DateTime]::UtcNow.ToString('o'),'run_stamp='+$env:RUN_STAMP,'candidate_id='+$env:CANDIDATE_ID,'package_attestation='+$env:PACKAGE_TOKEN,'expected_a_branch='+$env:EXPECTED_A,'expected_a_build='+$env:EXPECTED_BUILD,'wire_protocol_baseline_commit='+$env:WIRE_BASELINE,'diagnostic_only=true','native_execution_probe=false','stage=invocation_start','') | Set-Content -LiteralPath $p -Encoding UTF8"
-if errorlevel 1 endlocal & exit /b 92
+if errorlevel 1 (
+  echo ERROR: could not create exact-attempt v16 diagnostic !DIAG_PATH!.
+  endlocal & exit /b 92
+)
 
 echo.
 echo ====================================================================
@@ -43,44 +52,78 @@ set "STAGE=tailscale_bootstrap"
 set "TAILSCALE_ATTEMPTED=1"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-bootstrap.ps1"
 set "STEP_RC=!ERRORLEVEL!"
-if not "!STEP_RC!"=="0" set "RC=!STEP_RC!" & goto :finalize
+if not "!STEP_RC!"=="0" (
+  set "RC=!STEP_RC!"
+  goto :finalize
+)
 
 set "STAGE=loopback_forwarder_start"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0loopback-relay-forwarder.ps1" -Start
 set "STEP_RC=!ERRORLEVEL!"
-if not "!STEP_RC!"=="0" set "RC=!STEP_RC!" & goto :finalize
+if not "!STEP_RC!"=="0" (
+  set "RC=!STEP_RC!"
+  goto :finalize
+)
 set "FORWARDER_ACTIVE=1"
 
 set "STAGE=v16_offline_package_selftests"
 echo Verifying v16 diagnostic package before FIFA is touched...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0matchmaking-v16-candidate-attest.ps1" -SelfTest
-if errorlevel 1 set "RC=!ERRORLEVEL!" & goto :finalize
+set "STEP_RC=!ERRORLEVEL!"
+if not "!STEP_RC!"=="0" (
+  set "RC=!STEP_RC!"
+  goto :finalize
+)
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0matchmaking-v16-native-handoff-attest.ps1" -SelfTest
-if errorlevel 1 set "RC=!ERRORLEVEL!" & goto :finalize
+set "STEP_RC=!ERRORLEVEL!"
+if not "!STEP_RC!"=="0" (
+  set "RC=!STEP_RC!"
+  goto :finalize
+)
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0classify-network-observer-v16.ps1" -SelfTest
-if errorlevel 1 set "RC=!ERRORLEVEL!" & goto :finalize
+set "STEP_RC=!ERRORLEVEL!"
+if not "!STEP_RC!"=="0" (
+  set "RC=!STEP_RC!"
+  goto :finalize
+)
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0collect-evidence-v16.ps1" -SelfTest
-if errorlevel 1 set "RC=!ERRORLEVEL!" & goto :finalize
+set "STEP_RC=!ERRORLEVEL!"
+if not "!STEP_RC!"=="0" (
+  set "RC=!STEP_RC!"
+  goto :finalize
+)
 
 set "STAGE=v16_candidate_gate"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0matchmaking-v16-candidate-attest.ps1"
 set "STEP_RC=!ERRORLEVEL!"
-if not "!STEP_RC!"=="0" set "RC=!STEP_RC!" & goto :finalize
+if not "!STEP_RC!"=="0" (
+  set "RC=!STEP_RC!"
+  goto :finalize
+)
 
 set "STAGE=v16_native_address_map_attestation"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0matchmaking-v16-native-handoff-attest.ps1"
 set "STEP_RC=!ERRORLEVEL!"
-if not "!STEP_RC!"=="0" set "RC=!STEP_RC!" & goto :finalize
+if not "!STEP_RC!"=="0" (
+  set "RC=!STEP_RC!"
+  goto :finalize
+)
 
 set "STAGE=network_observer_selftest"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -SelfTest
 set "STEP_RC=!ERRORLEVEL!"
-if not "!STEP_RC!"=="0" set "RC=!STEP_RC!" & goto :finalize
+if not "!STEP_RC!"=="0" (
+  set "RC=!STEP_RC!"
+  goto :finalize
+)
 
 set "STAGE=network_observer_start"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Start
 set "STEP_RC=!ERRORLEVEL!"
-if not "!STEP_RC!"=="0" set "RC=!STEP_RC!" & goto :finalize
+if not "!STEP_RC!"=="0" (
+  set "RC=!STEP_RC!"
+  goto :finalize
+)
 set "OBSERVER_ACTIVE=1"
 
 set "STAGE=diagnostic_runtime"
