@@ -16,6 +16,7 @@ set "STAGE=invocation_start"
 set "OBSERVER_ACTIVE=0"
 set "FORWARDER_ACTIVE=0"
 set "TAILSCALE_ATTEMPTED=0"
+set "NETWORK_PATH="
 
 for /f "usebackq delims=" %%S in (`powershell.exe -NoProfile -Command "Get-Date -Format 'yyyyMMdd-HHmmssfff'"`) do set "RUN_STAMP=%%S"
 for /f "usebackq delims=" %%D in (`powershell.exe -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"`) do set "DESKTOP=%%D"
@@ -28,8 +29,9 @@ if not defined DESKTOP (
   endlocal & exit /b 91
 )
 set "DIAG_PATH=!DESKTOP!\FIFA15-F15B-DIAG-!RUN_STAMP!.txt"
+set "NATIVE_PATH=!DESKTOP!\FIFA15-F15B-NATIVE-V16-!RUN_STAMP!.log"
 
-powershell.exe -NoProfile -Command "$p=$env:DIAG_PATH; @('FIFA 15 F15B v16 exact-attempt diagnostic','started_utc='+[DateTime]::UtcNow.ToString('o'),'run_stamp='+$env:RUN_STAMP,'candidate_id='+$env:CANDIDATE_ID,'package_attestation='+$env:PACKAGE_TOKEN,'expected_a_branch='+$env:EXPECTED_A,'expected_a_build='+$env:EXPECTED_BUILD,'wire_protocol_baseline_commit='+$env:WIRE_BASELINE,'diagnostic_only=true','native_execution_probe=false','stage=invocation_start','') | Set-Content -LiteralPath $p -Encoding UTF8"
+powershell.exe -NoProfile -Command "$p=$env:DIAG_PATH; @('FIFA 15 F15B v16 exact-attempt diagnostic','started_utc='+[DateTime]::UtcNow.ToString('o'),'run_stamp='+$env:RUN_STAMP,'candidate_id='+$env:CANDIDATE_ID,'package_attestation='+$env:PACKAGE_TOKEN,'expected_a_branch='+$env:EXPECTED_A,'expected_a_build='+$env:EXPECTED_BUILD,'wire_protocol_baseline_commit='+$env:WIRE_BASELINE,'diagnostic_only=true','native_execution_probe=false','native_attestation_log='+$env:NATIVE_PATH,'stage=invocation_start','') | Set-Content -LiteralPath $p -Encoding UTF8"
 if errorlevel 1 (
   echo ERROR: could not create exact-attempt v16 diagnostic !DIAG_PATH!.
   endlocal & exit /b 92
@@ -45,6 +47,7 @@ echo   Expected A: !EXPECTED_A!
 echo   Wire baseline: !WIRE_BASELINE!
 echo   No matchmaking wire changes. No FIFA code hook/debugger attach.
 echo   Exact diagnostic: !DIAG_PATH!
+echo   Exact native map: !NATIVE_PATH!
 echo ====================================================================
 echo.
 
@@ -102,7 +105,7 @@ if not "!STEP_RC!"=="0" (
 )
 
 set "STAGE=v16_native_address_map_attestation"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0matchmaking-v16-native-handoff-attest.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0matchmaking-v16-native-handoff-attest.ps1" -OutputPath "!NATIVE_PATH!"
 set "STEP_RC=!ERRORLEVEL!"
 if not "!STEP_RC!"=="0" (
   set "RC=!STEP_RC!"
@@ -125,6 +128,13 @@ if not "!STEP_RC!"=="0" (
   goto :finalize
 )
 set "OBSERVER_ACTIVE=1"
+for /f "usebackq delims=" %%N in (`powershell.exe -NoProfile -Command "$p=Join-Path $env:TEMP 'fifa15-f15b-network-observer.json'; if(Test-Path -LiteralPath $p){$s=Get-Content -LiteralPath $p -Raw ^| ConvertFrom-Json; if($s.log_path){[IO.Path]::GetFullPath([string]$s.log_path)}}"`) do set "NETWORK_PATH=%%N"
+if not defined NETWORK_PATH (
+  echo ERROR: network observer did not expose its exact current-attempt log path.
+  set "RC=93"
+  goto :finalize
+)
+echo   Exact network log: !NETWORK_PATH!
 
 set "STAGE=diagnostic_runtime"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0diagnostic-run.ps1"
@@ -136,11 +146,15 @@ for /f "usebackq delims=" %%D in (`powershell.exe -NoProfile -Command "$a=Get-It
 set "FINAL_STAGE=!STAGE!"
 
 if "!OBSERVER_ACTIVE!"=="1" (
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Stop -AppendToNewestDiag
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Stop
   set "RAWOBSRC=!ERRORLEVEL!"
   set "OBSERVER_ACTIVE=0"
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0classify-network-observer-v16.ps1"
-  set "OBSRC=!ERRORLEVEL!"
+  if defined NETWORK_PATH (
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0classify-network-observer-v16.ps1" -LogPath "!NETWORK_PATH!"
+    set "OBSRC=!ERRORLEVEL!"
+  ) else (
+    set "OBSRC=43"
+  )
   if "!RC!"=="0" if not "!OBSRC!"=="0" set "RC=!OBSRC!"
 ) else (
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0guest-network-observer.ps1" -Stop >nul 2>&1
@@ -163,11 +177,11 @@ if "!TAILSCALE_ATTEMPTED!"=="1" (
   set "CLEANRC=0"
 )
 
-powershell.exe -NoProfile -Command "$p=$env:DIAG_PATH; if(Test-Path -LiteralPath $p){ Add-Content -LiteralPath $p -Encoding UTF8 -Value @('','=== V16 LAUNCHER RESULT ===','run_stamp='+$env:RUN_STAMP,'candidate_id='+$env:CANDIDATE_ID,'package_attestation='+$env:PACKAGE_TOKEN,'wire_protocol_baseline_commit='+$env:WIRE_BASELINE,'final_stage='+$env:FINAL_STAGE,'launcher_exit_code='+$env:RC,'legacy_observer_exit_code='+$env:RAWOBSRC,'v16_observer_exit_code='+$env:OBSRC,'tailscale_cleanup_exit_code='+$env:CLEANRC,'finished_utc='+[DateTime]::UtcNow.ToString('o')) }"
+powershell.exe -NoProfile -Command "$p=$env:DIAG_PATH; if(Test-Path -LiteralPath $p){ Add-Content -LiteralPath $p -Encoding UTF8 -Value @('','=== V16 LAUNCHER RESULT ===','run_stamp='+$env:RUN_STAMP,'candidate_id='+$env:CANDIDATE_ID,'package_attestation='+$env:PACKAGE_TOKEN,'wire_protocol_baseline_commit='+$env:WIRE_BASELINE,'network_observer_log='+$env:NETWORK_PATH,'native_attestation_log='+$env:NATIVE_PATH,'final_stage='+$env:FINAL_STAGE,'launcher_exit_code='+$env:RC,'legacy_observer_exit_code='+$env:RAWOBSRC,'v16_observer_exit_code='+$env:OBSRC,'tailscale_cleanup_exit_code='+$env:CLEANRC,'finished_utc='+[DateTime]::UtcNow.ToString('o')) }"
 
 echo.
 echo Collecting exact-attempt Player-B diagnostic, network, native-address-map, forwarder and crash evidence...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0collect-evidence-v16.ps1" -DiagPath "!DIAG_PATH!"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0collect-evidence-v16.ps1" -DiagPath "!DIAG_PATH!" -NetworkPath "!NETWORK_PATH!" -NativePath "!NATIVE_PATH!"
 set "EVIDRC=!ERRORLEVEL!"
 if not "!EVIDRC!"=="0" echo WARNING: automatic v16 evidence bundling failed with error !EVIDRC!.
 
@@ -180,6 +194,8 @@ echo ====================================================================
 echo   PLAYER B V16 ATTEMPT FINISHED - RC !RC! - OBSERVER !OBSRC!
 echo ====================================================================
 echo Exact diagnostic: !DIAG_PATH!
+if defined NETWORK_PATH echo Exact network log: !NETWORK_PATH!
+echo Exact native map: !NATIVE_PATH!
 if "!EVIDRC!"=="0" echo Send the newest FIFA15-F15B-EVIDENCE-*.zip from this attempt.
 echo V16 is diagnostic-only: a matchmaking failure is evidence, not proof that the relay packet contract changed.
 if not "!RC!"=="0" pause
