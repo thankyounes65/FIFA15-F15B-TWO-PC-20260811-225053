@@ -15,6 +15,8 @@ jobs:
 
       - name: Compile and execute v15 transform fixture
         shell: powershell
+        env:
+          V15_EXPECTED_MODEL: common-peer-send-boundary
         run: |
           $ErrorActionPreference = 'Stop'
           rustc --edition=2024 .\ci\v15-transform-selftest.rs -o .\ci\v15-transform-selftest.exe
