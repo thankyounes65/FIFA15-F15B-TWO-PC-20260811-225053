@@ -5,6 +5,7 @@ Set-StrictMode -Version 2
 $Root = Split-Path -Parent $PSCommandPath
 $ExpectedBranch = 'integration/test-matchmaking-b-joiner-result-v13'
 $ExpectedHostBranch = 'integration/test-matchmaking-joiner-result-v13'
+$ExpectedRevisionMarker = 'joiner-result-v13'
 $ManifestPath = Join-Path $Root 'PACKAGE-MANIFEST.json'
 $RuntimeTestPath = Join-Path $Root 'RUNTIME-TEST.md'
 $ManagedHostsPath = Join-Path $Root 'fifa15-managed-hostnames.ps1'
@@ -40,6 +41,8 @@ try { $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
 if ([int]$manifest.format -ne 3 -or [string]$manifest.role -ne 'f15b') { Fail 'unexpected package format/role.' }
 if ([string]$manifest.runtime_branch -ne $ExpectedBranch) { Fail "manifest branch '$($manifest.runtime_branch)' != '$ExpectedBranch'." }
 if ([string]$manifest.runtime_features.paired_host_branch -ne $ExpectedHostBranch) { Fail "manifest host branch '$($manifest.runtime_features.paired_host_branch)' != '$ExpectedHostBranch'." }
+if ([string]$manifest.package_revision -notlike "*$ExpectedRevisionMarker*") { Fail "manifest revision '$($manifest.package_revision)' is not stamped for $ExpectedRevisionMarker." }
+if ([string]$manifest.note -notlike '*REAS.RSLT=1*' -or [string]$manifest.note -notlike '*SUCCESS_JOINED_NEW_GAME*') { Fail 'manifest note lost the v13 joiner-result wire contract.' }
 if ([bool]$manifest.runtime_features.in_process_fifa_instrumentation) { Fail 'v13 must not attach in-process FIFA instrumentation.' }
 foreach ($port in @(3658,17502,17503)) {
     $ports = @($manifest.runtime_features.loopback_forward_ports | ForEach-Object { [int]$_ })
@@ -74,5 +77,5 @@ if ($SelfTest) {
     [Management.Automation.Language.Parser]::ParseFile($PSCommandPath,[ref]$tokens,[ref]$errors) | Out-Null
     if ($errors -and $errors.Count -gt 0) { Fail "preflight parse failed: $((@($errors | ForEach-Object Message)) -join '; ')" }
 }
-Write-Host 'PASS: Player B v13 package provenance matches the exact paired branches, retains v12 routing/passive evidence, and has no in-process FIFA instrumentation.' -ForegroundColor Green
+Write-Host 'PASS: Player B v13 package provenance matches the exact paired branches, joiner-result manifest contract, retained v12 routing/passive evidence, and no in-process FIFA instrumentation.' -ForegroundColor Green
 exit 0
