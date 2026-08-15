@@ -4,7 +4,7 @@ cd /d "%~dp0"
 title FIFA 15 Remote Player - f15b - V16 Native Handoff Diagnostic
 
 set "CANDIDATE_ID=FIFA15-MM-V16-B-NATIVE-HANDOFF"
-set "PACKAGE_TOKEN=F15B-GITHUB-DIAGNOSTIC-20260815-V16-NATIVE-HANDOFF-1"
+set "PACKAGE_TOKEN=F15B-GITHUB-DIAGNOSTIC-20260815-V16-NATIVE-HANDOFF-2"
 set "EXPECTED_A=integration/test-matchmaking-b-native-handoff-v16"
 set "EXPECTED_BUILD=build_pairing_gsu_npsi_v15.rs"
 set "WIRE_BASELINE=53dbaafb32030d6790beb0c16d336acd68cc1d49"
