@@ -43,6 +43,27 @@ function Test-Contract {
     Write-Host "  Host IP: $($config.host_ip)" -ForegroundColor Gray
 }
 
+function Connect-CandidateGate([Net.Sockets.TcpClient]$Client,[string]$HostIp,[int]$Port) {
+    $async = $null
+    try {
+        $async = $Client.BeginConnect($HostIp,$Port,$null,$null)
+        if (-not $async.AsyncWaitHandle.WaitOne(5000,$false)) {
+            throw "Player A v13-v2 candidate gate $HostIp`:$Port timed out. Start the Player A v13-v2 runtime first."
+        }
+        $Client.EndConnect($async)
+        if (-not $Client.Connected) {
+            throw "Player A v13-v2 candidate gate $HostIp`:$Port did not establish a TCP connection."
+        }
+    }
+    catch {
+        $detail = $_.Exception.Message
+        throw "Player A v13-v2 candidate gate $HostIp`:$Port is unreachable or refused the TCP connection. Detail: $detail"
+    }
+    finally {
+        if ($async -and $async.AsyncWaitHandle) { $async.AsyncWaitHandle.Close() }
+    }
+}
+
 if ($SelfTest) {
     Test-Contract
     exit 0
@@ -52,10 +73,7 @@ $config = Get-Config
 $hostIp = [string]$config.host_ip
 $client = New-Object Net.Sockets.TcpClient
 try {
-    $task = $client.ConnectAsync($hostIp,$GatePort)
-    if (-not $task.Wait(5000) -or -not $client.Connected) {
-        throw "Player A v13-v2 candidate gate $hostIp`:$GatePort is unreachable. Start the Player A v13-v2 runtime first."
-    }
+    Connect-CandidateGate -Client $client -HostIp $hostIp -Port $GatePort
     $client.ReceiveTimeout = 5000
     $client.SendTimeout = 5000
     $stream = $client.GetStream()
