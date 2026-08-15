@@ -62,7 +62,20 @@ if (Test-Path -LiteralPath $GitMetadataPath) {
     Write-Host 'INFO: no .git metadata is present; treating this as a packaged GitHub archive and validating embedded v13 provenance.' -ForegroundColor Cyan
 }
 
-Require-Contains $RuntimeTestPath @($ExpectedBranch,$ExpectedHostBranch,'no in-process FIFA instrumentation','REAS.RSLT=1','SUCCESS_JOINED_NEW_GAME','ACTIVE_CONNECTED','NotifyPlayerJoinCompleted')
+# Validate only markers that are part of Player B's documented v13 package
+# contract. ACTIVE_CONNECTED belongs to the host-side lifecycle/evidence path and
+# is not required text in this B-side RUNTIME-TEST.md; requiring it here caused a
+# valid fresh GitHub ZIP to fail before FIFA despite correct v13 provenance.
+Require-Contains $RuntimeTestPath @(
+    $ExpectedBranch,
+    $ExpectedHostBranch,
+    'no in-process FIFA instrumentation',
+    'REAS.RSLT=1',
+    'SUCCESS_JOINED_NEW_GAME',
+    'bilateral promotion-time',
+    'NotifyPlayerJoinCompleted',
+    'reciprocal mesh/UDP'
+)
 Require-Contains $ManagedHostsPath @('demangler.ea.com')
 Require-Contains $ForwarderPath @('3658','17502','17503','peach.online.ea.com','127.0.0.1')
 Require-Contains $DemanglerPreflightPath @('/appliance/register?role=f15b','$request.Proxy = $null','DEMANGLER_HOST_UNREACHABLE')
