@@ -1,16 +1,17 @@
 {
   "format": 3,
-  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503+matchmaking-v14-0x0b-attest1",
+  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503+matchmaking-v14-0x0b-attest2",
   "role": "f15b",
-  "note": "Proven physical Player B appliance retained unchanged for Tailscale/LSX/EA-readiness/TLS/QoS/FUT routing. FIFA15-MM-V14-0X0B changes only the fail-closed pre-launch candidate attestation to Player A on TCP/48216. The Player B checkout remains the dedicated GitHub repository and sends its exact current Git commit to Player A before FIFA starts. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records their observed hashes/provenance.",
+  "note": "Proven physical Player B appliance retained unchanged for Tailscale/LSX/EA-readiness/TLS/QoS/FUT routing. FIFA15-MM-V14-0X0B changes only the fail-closed pre-launch candidate attestation to Player A on TCP/48216. The appliance remains portable: a fresh GitHub ZIP/extracted folder is supported and no .git directory is required. The v14 package token is checked in both APPLIANCE-CONFIG.json and PACKAGE-MANIFEST.json and must match Player A before FIFA starts. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records their observed hashes/provenance.",
   "matchmaking_overlay": {
     "candidate_id": "FIFA15-MM-V14-0X0B",
     "package_attestation": "F15B-GITHUB-KNOWN-GOOD-20260811-V14-0X0B-1",
     "expected_host_branch": "integration/test-matchmaking-session-completion-0x0b-v14",
     "gate_port": 48216,
     "changes_guest_boot_stack": false,
-    "requires_git_checkout": true,
-    "sends_exact_repo_commit": true
+    "requires_git_checkout": false,
+    "sends_exact_repo_commit": false,
+    "portable_extracted_folder_supported": true
   },
   "documentation_files": [
     "README-FIRST.txt",
