@@ -5,6 +5,7 @@ on:
     branches: [diagnostic/v16-native-handoff-20260815]
   workflow_dispatch:
 
+# Exact-path contract: observer/native evidence must be bound by this attempt, never newest-file heuristics.
 jobs:
   diagnostic-contract:
     runs-on: windows-latest
