@@ -1,17 +1,19 @@
 {
   "format": 3,
-  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503+matchmaking-v14-0x0b-attest2",
+  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503+matchmaking-v15-gsu-npsi-evidence1",
   "role": "f15b",
-  "note": "Proven physical Player B appliance retained unchanged for Tailscale/LSX/EA-readiness/TLS/QoS/FUT routing. FIFA15-MM-V14-0X0B changes only the fail-closed pre-launch candidate attestation to Player A on TCP/48216. The appliance remains portable: a fresh GitHub ZIP/extracted folder is supported and no .git directory is required. The v14 package token is checked in both APPLIANCE-CONFIG.json and PACKAGE-MANIFEST.json and must match Player A before FIFA starts. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records their observed hashes/provenance.",
+  "note": "Proven physical Player B boot/connect stack retained for Tailscale/LSX/EA-readiness/TLS/QoS/FUT routing. FIFA15-MM-V15-GSU-NPSI changes the fail-closed candidate attestation to Player A and hardens evidence provenance so each launcher invocation is bound to its own diagnostic/evidence collection even when a prerequisite fails before FIFA. A fresh GitHub ZIP/extracted folder is supported; no .git directory is required. Proprietary FIFA/crack binaries are not redistributed; PLAYER-B-KNOWN-GOOD.json records their observed hashes/provenance.",
   "matchmaking_overlay": {
-    "candidate_id": "FIFA15-MM-V14-0X0B",
-    "package_attestation": "F15B-GITHUB-KNOWN-GOOD-20260811-V14-0X0B-1",
-    "expected_host_branch": "integration/test-matchmaking-session-completion-0x0b-v14",
+    "candidate_id": "FIFA15-MM-V15-GSU-NPSI",
+    "package_attestation": "F15B-GITHUB-KNOWN-GOOD-20260815-V15-GSU-NPSI-1",
+    "expected_host_branch": "integration/test-matchmaking-gsu-npsi-v15",
+    "expected_host_build": "build_pairing_gsu_npsi_v15.rs",
     "gate_port": 48216,
     "changes_guest_boot_stack": false,
     "requires_git_checkout": false,
     "sends_exact_repo_commit": false,
-    "portable_extracted_folder_supported": true
+    "portable_extracted_folder_supported": true,
+    "exact_attempt_evidence_binding": true
   },
   "documentation_files": [
     "README-FIRST.txt",
@@ -21,7 +23,8 @@
   "verification_files": [
     "VERIFY-PLAYER-B-GAME-FILES.bat",
     "VERIFY-PLAYER-B-GAME-FILES.ps1",
-    "matchmaking-v14-0x0b-attest.ps1"
+    "matchmaking-v15-gsu-npsi-attest.ps1",
+    "collect-evidence-v15.ps1"
   ],
   "runtime_features": {
     "exact_restore": "restore-v3",
