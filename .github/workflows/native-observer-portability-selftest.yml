@@ -42,7 +42,7 @@ jobs:
             }
           }
 
-      - name: Verify absent-drive probe and portable attestation
+      - name: Verify portable preflight contracts
         shell: powershell
         run: |
           Set-StrictMode -Version Latest
@@ -50,4 +50,21 @@ jobs:
           .\VERIFY-PLAYER-B-GAME-FILES.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\matchmaking-native-observer-attest.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\RUN-FIFA15-F15B-NATIVE-OBSERVER.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Bootstrap pinned package-local Frida
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          .\RUN-FIFA15-F15B-NATIVE-OBSERVER.ps1 -DependencySelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $site = Join-Path $PWD '.observer-deps\frida-17.9.11'
+          if (-not (Test-Path -LiteralPath $site -PathType Container)) {
+            throw 'Pinned package-local Frida directory was not created.'
+          }
+          $env:PYTHONPATH = $site
+          python -c "import frida,sys; print(frida.__version__); sys.exit(0 if frida.__version__ == '17.9.11' else 9)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
