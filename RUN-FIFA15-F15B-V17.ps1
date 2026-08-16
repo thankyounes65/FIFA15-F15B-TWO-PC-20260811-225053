@@ -5,7 +5,10 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2
 $Root = Split-Path -Parent $PSCommandPath
 $Source = Join-Path $Root 'RUN-FIFA15-F15B-V16.bat'
-$Temp = Join-Path $env:TEMP ("RUN-FIFA15-F15B-V17-{0}.bat" -f $PID)
+# The inherited BAT resolves every helper via %~dp0. Render beside the package,
+# never in %TEMP%, or the fixed v16 boot/connect stack would look for its scripts
+# in the wrong directory. The generated BAT is removed in finally.
+$Temp = Join-Path $Root ("RUN-FIFA15-F15B-V17-rendered-{0}.bat" -f $PID)
 
 function Replace-Exact([ref]$Text,[string]$Old,[string]$New,[string]$Label) {
     $count = ([regex]::Matches($Text.Value,[regex]::Escape($Old))).Count
@@ -37,7 +40,8 @@ foreach ($required in @(
     'matchmaking-v17-candidate-attest.ps1',
     'matchmaking-v16-native-handoff-attest.ps1',
     'classify-network-observer-v16.ps1',
-    'collect-evidence-v16.ps1'
+    'collect-evidence-v16.ps1',
+    'cd /d "%~dp0"'
 )) {
     if (-not $text.Contains($required)) { throw "Rendered v17 B launcher lost required marker: $required" }
 }
@@ -53,11 +57,15 @@ if ($SelfTest) {
     $tokens = $null; $errors = $null
     [Management.Automation.Language.Parser]::ParseFile($PSCommandPath,[ref]$tokens,[ref]$errors) | Out-Null
     if ($errors -and $errors.Count -gt 0) { throw (($errors | ForEach-Object Message) -join '; ') }
+    $tempParent = Split-Path -Parent $Temp
+    if (-not [string]::Equals([IO.Path]::GetFullPath($tempParent),[IO.Path]::GetFullPath($Root),[StringComparison]::OrdinalIgnoreCase)) {
+        throw "v17 rendered BAT must stay package-relative; root=$Root temp=$Temp"
+    }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'matchmaking-v17-candidate-attest.ps1') -SelfTest
     if ($LASTEXITCODE -ne 0) { throw 'v17 candidate attestor self-test failed' }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'matchmaking-v16-native-handoff-attest.ps1') -SelfTest
     if ($LASTEXITCODE -ne 0) { throw 'inherited v16 native attestor self-test failed' }
-    Write-Host 'PASS: v17 B launcher renders from exact fixed v16 runtime, changes candidate metadata only, and retains v16 native/network evidence tools.' -ForegroundColor Green
+    Write-Host 'PASS: v17 B launcher renders beside the package from exact fixed v16 runtime, changes candidate metadata only, and retains v16 native/network evidence tools.' -ForegroundColor Green
     exit 0
 }
 
