@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "candidate_id": "FIFA15-MM-V18-DEFER-JOIN-COMPLETED",
+  "package_attestation": "F15B-GITHUB-DIAGNOSTIC-20260815-V18-DEFER-JOIN-COMPLETED-1",
+  "source_branch": "diagnostic/v18-defer-join-completed-20260815",
+  "expected_host_branch": "integration/test-matchmaking-defer-join-completed-v18",
+  "expected_host_build": "build_pairing_defer_join_completed_v18.rs",
+  "wire_protocol_baseline_commit": "53dbaafb32030d6790beb0c16d336acd68cc1d49",
+  "tested_v16_runtime_base": "7d918d23fe7e697035d6b2b4f9c7afdff1b62206",
+  "guest_runtime_base_branch": "diagnostic/v16-native-handoff-20260815",
+  "guest_runtime_base_commit": "c116ce720c6193fcaf5b6a4d3a0693c16454cdc9",
+  "attestation_gate_port": 48216,
+  "changes_guest_boot_stack": false,
+  "changes_guest_network_observer": false,
+  "changes_guest_native_attestor": false,
+  "changes_guest_matchmaking_wire_protocol": false,
+  "host_matchmaking_wire_delta": "defer_joiner_join_completed_until_mesh_promotion"
+}
