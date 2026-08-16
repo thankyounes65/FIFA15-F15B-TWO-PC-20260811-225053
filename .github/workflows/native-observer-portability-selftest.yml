@@ -1,0 +1,53 @@
+name: Player B native observer portability self-test
+
+on:
+  push:
+    branches:
+      - integration/test-matchmaking-native-observer-v1
+  workflow_dispatch:
+
+jobs:
+  portability:
+    runs-on: windows-latest
+    steps:
+      - name: Check out Player B package
+        uses: actions/checkout@v4
+
+      - name: Parse scripts and forbid Git runtime dependency
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          $targets = @(
+            '.\VERIFY-PLAYER-B-GAME-FILES.ps1',
+            '.\matchmaking-native-observer-attest.ps1',
+            '.\RUN-FIFA15-F15B-NATIVE-OBSERVER.ps1'
+          )
+          foreach ($path in $targets) {
+            $tokens = $null
+            $errors = $null
+            $ast = [Management.Automation.Language.Parser]::ParseFile($path,[ref]$tokens,[ref]$errors)
+            if ($errors -and $errors.Count -gt 0) {
+              throw "$path parse failed: $((@($errors | ForEach-Object Message)) -join '; ')"
+            }
+            $commands = @($ast.FindAll({
+              param($node)
+              $node -is [Management.Automation.Language.CommandAst]
+            }, $true))
+            foreach ($command in $commands) {
+              $name = $command.GetCommandName()
+              if ($name -and $name.ToLowerInvariant() -in @('git','git.exe')) {
+                throw "$path still invokes Git at runtime: $($command.Extent.Text)"
+              }
+            }
+          }
+
+      - name: Verify absent-drive probe and portable attestation
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          .\VERIFY-PLAYER-B-GAME-FILES.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\matchmaking-native-observer-attest.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
