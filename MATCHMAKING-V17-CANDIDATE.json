@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "candidate_id": "FIFA15-MM-V17-A-SELF-GSU-NPSI",
+  "package_attestation": "F15B-GITHUB-DIAGNOSTIC-20260815-V17-SELF-GSU-NPSI-1",
+  "source_branch": "diagnostic/v17-self-gsu-npsi-20260815",
+  "expected_host_branch": "integration/test-matchmaking-a-self-gsu-npsi-v17",
+  "expected_host_build": "build_pairing_gsu_npsi_v17.rs",
+  "wire_protocol_baseline_commit": "53dbaafb32030d6790beb0c16d336acd68cc1d49",
+  "tested_v16_runtime_base": "7d918d23fe7e697035d6b2b4f9c7afdff1b62206",
+  "guest_runtime_base_branch": "diagnostic/v16-native-handoff-20260815",
+  "guest_runtime_base_commit": "c116ce720c6193fcaf5b6a4d3a0693c16454cdc9",
+  "attestation_gate_port": 48216,
+  "changes_guest_boot_stack": false,
+  "changes_guest_network_observer": false,
+  "changes_guest_native_attestor": false,
+  "changes_guest_matchmaking_wire_protocol": false,
+  "host_matchmaking_wire_delta": "creator_self_0x73_gid_npsi_replaces_legacy_xnet"
+}
