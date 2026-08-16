@@ -2,7 +2,9 @@ name: FIFA15 remote tester self-test
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - diagnostic/matchmaking-scenario-suite-20260816
   workflow_dispatch:
 
 jobs:
@@ -30,6 +32,10 @@ jobs:
             '.\guest-network-observer.ps1',
             '.\diagnostic-run.ps1',
             '.\matchmaking-v15-gsu-npsi-attest.ps1',
+            '.\MATCHMAKING-SCENARIO-SUITE.json',
+            '.\RUN-FIFA15-F15B-SCENARIO.ps1',
+            '.\matchmaking-scenario-suite-attest.ps1',
+            '.\PLAYER-B-SCENARIO-EVIDENCE.md',
             '.\RUN-FIFA15-F15B.bat'
           )) {
             if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "missing Player B v15 file: $required" }
@@ -119,3 +125,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\safe-run.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\matchmaking-scenario-suite-attest.ps1 -All
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($scenario in 1..4) {
+            $env:SCENARIO_ID = [string]$scenario
+            .\matchmaking-scenario-suite-attest.ps1 -Scenario $scenario -SelfTest
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }

@@ -55,6 +55,9 @@ $tempPath = Join-Path $Root ('.RUN-FIFA15-F15B-SCENARIO-' + $PID + '.bat')
 [IO.File]::WriteAllText($tempPath,$template,[Text.Encoding]::ASCII)
 Copy-Item -LiteralPath $tempPath -Destination (Join-Path $attemptDir 'RENDERED-PLAYER-B-RUNTIME.bat') -Force
 Copy-Item -LiteralPath $SuitePath -Destination (Join-Path $attemptDir 'MATCHMAKING-SCENARIO-SUITE.json') -Force
+$renderedRuntimePath = Join-Path $attemptDir 'RENDERED-PLAYER-B-RUNTIME.bat'
+$suiteCopyPath = Join-Path $attemptDir 'MATCHMAKING-SCENARIO-SUITE.json'
+$observationPath = Join-Path $attemptDir 'PLAYER-B-OBSERVATION.txt'
 
 $startLines = @(
     'FIFA15 Player-B matchmaking scenario attempt',
@@ -68,9 +71,34 @@ $startLines = @(
     'b_branch=' + [string]$suite.b_branch,
     'b_package=' + $package,
     'guest_runtime_change=false',
-    'automatic_publication=false'
+    'automatic_publication=false',
+    'evidence_policy=exact_attempt_paths_and_hashes_no_newest_file_claim',
+    'network_observer_scope=connectivity_and_reachability_only',
+    'native_execution_probe=false',
+    'relay_wire_and_callback_evidence_owner=player_a_exact_trace',
+    'operator_observation_template=PLAYER-B-OBSERVATION.txt'
 )
 Set-Content -LiteralPath (Join-Path $attemptDir 'SCENARIO-MANIFEST.txt') -Value $startLines -Encoding UTF8
+Set-Content -LiteralPath $observationPath -Encoding UTF8 -Value @(
+    'FIFA15 Player-B scenario observation',
+    'scenario_id=' + $Scenario,
+    'candidate_id=' + [string]$entry.candidate_id,
+    'started_utc=' + $started.ToString('o'),
+    '',
+    'Record only what was observed on Player B during this exact attempt:',
+    'visible_ui=not recorded',
+    'time_visible_ui=not recorded',
+    'screenshot_or_video_file=not recorded',
+    'ready_control_state=not recorded',
+    'loading_or_lobby_outcome=not recorded',
+    'notes=not recorded',
+    '',
+    'Evidence boundary:',
+    'The network observer establishes connectivity/reachability only.',
+    'The native-attestation log is static and must not be read as callback execution.',
+    'Player A exact relay trace is the source for B GameManager wire events.',
+    'Add screenshots/video to this attempt directory before zipping it; preserve this template as provenance.'
+)
 
 $rc = 99
 try {
@@ -122,7 +150,10 @@ Add-Content -LiteralPath $manifestPath -Encoding UTF8 -Value @(
     'finished_utc=' + $finished.ToString('o'),
     'launcher_exit_code=' + $rc,
     'exact_b_head=' + $head,
-    'evidence_file_count=' + $copied.Count
+    'evidence_file_count=' + $copied.Count,
+    'rendered_runtime_sha256=' + (Get-FileHash -LiteralPath $renderedRuntimePath -Algorithm SHA256).Hash.ToLowerInvariant(),
+    'scenario_suite_sha256=' + (Get-FileHash -LiteralPath $suiteCopyPath -Algorithm SHA256).Hash.ToLowerInvariant(),
+    'observation_template_sha256=' + (Get-FileHash -LiteralPath $observationPath -Algorithm SHA256).Hash.ToLowerInvariant()
 )
 foreach ($path in ($copied | Sort-Object -Unique)) {
     $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()

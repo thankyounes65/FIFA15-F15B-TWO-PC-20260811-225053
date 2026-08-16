@@ -10,6 +10,8 @@ Set-StrictMode -Version 2
 $Root = Split-Path -Parent $PSCommandPath
 $ConfigPath = Join-Path $Root 'APPLIANCE-CONFIG.json'
 $SuitePath = Join-Path $Root 'MATCHMAKING-SCENARIO-SUITE.json'
+$ScenarioRunnerPath = Join-Path $Root 'RUN-FIFA15-F15B-SCENARIO.ps1'
+$ScenarioLauncherPath = Join-Path $Root 'RUN-FIFA15-F15B.bat'
 
 function Get-Suite {
     if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { throw "Missing inherited Player-B config: $ConfigPath" }
@@ -24,6 +26,33 @@ function Get-Suite {
     $items = @($suite.scenarios)
     if ($items.Count -ne 4) { throw "scenario suite must contain exactly four scenarios; found $($items.Count)" }
     if ((@($items.id | Sort-Object -Unique) -join ',') -ne '1,2,3,4') { throw 'scenario suite ids must be exactly 1,2,3,4' }
+    foreach ($path in @($ScenarioRunnerPath,$ScenarioLauncherPath)) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing Player-B scenario evidence file: $path" }
+    }
+    $tokens = $null; $errors = $null
+    [Management.Automation.Language.Parser]::ParseFile($ScenarioRunnerPath,[ref]$tokens,[ref]$errors) | Out-Null
+    if ($errors -and $errors.Count -gt 0) { throw "Scenario runner parse errors: $(($errors | ForEach-Object Message) -join '; ')" }
+    $runner = Get-Content -LiteralPath $ScenarioRunnerPath -Raw
+    foreach ($marker in @(
+        'SCENARIO-MANIFEST.txt',
+        'PLAYER-B-OBSERVATION.txt',
+        'RENDERED-PLAYER-B-RUNTIME.bat',
+        'MATCHMAKING-SCENARIO-SUITE.json',
+        'exact_b_head=',
+        'evidence_file_count=',
+        'rendered_runtime_sha256=',
+        'scenario_suite_sha256=',
+        'network_observer_scope=connectivity_and_reachability_only',
+        'native_execution_probe=false',
+        'relay_wire_and_callback_evidence_owner=player_a_exact_trace',
+        'No GitHub upload/publish step was attempted.'
+    )) {
+        if (-not $runner.Contains($marker)) { throw "Scenario runner lost exact-attempt evidence marker: $marker" }
+    }
+    $launcher = Get-Content -LiteralPath $ScenarioLauncherPath -Raw
+    foreach ($marker in @('RUN-FIFA15-F15B-SCENARIO.ps1','Scenario [1-4/Q]','JoinCompleted(A)','single B GSU')) {
+        if (-not $launcher.Contains($marker)) { throw "Scenario launcher lost menu/evidence marker: $marker" }
+    }
     return [pscustomobject]@{ Config=$config; Suite=$suite; Items=$items }
 }
 
