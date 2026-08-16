@@ -14,10 +14,20 @@ function Fail([string]$Text) {
     exit 1
 }
 
+function Test-FifaGameDir([string]$Candidate) {
+    if (-not $Candidate) { return $false }
+    try {
+        $exePath = [IO.Path]::Combine($Candidate, 'fifa15.exe')
+        return [IO.File]::Exists($exePath)
+    } catch {
+        return $false
+    }
+}
+
 function Resolve-GameDir {
     if ($GameDir) {
-        $candidate = [IO.Path]::GetFullPath($GameDir)
-        if (-not (Test-Path -LiteralPath (Join-Path $candidate 'fifa15.exe') -PathType Leaf)) {
+        try { $candidate = [IO.Path]::GetFullPath($GameDir) } catch { Fail "Invalid -GameDir '$GameDir': $($_.Exception.Message)" }
+        if (-not (Test-FifaGameDir $candidate)) {
             Fail "No fifa15.exe found in -GameDir '$candidate'."
         }
         return $candidate
@@ -29,7 +39,7 @@ function Resolve-GameDir {
         'C:\Games\FIFA 15',
         'F:\Games\FIFA 15'
     )) {
-        if (Test-Path -LiteralPath (Join-Path $candidate 'fifa15.exe') -PathType Leaf) {
+        if (Test-FifaGameDir $candidate) {
             return $candidate
         }
     }
@@ -59,7 +69,10 @@ function Invoke-SelfTest {
     if ($sys.sha256 -ne 'B477BACB277F43A9C93C4E4D8B47E1F0F8B6B2E9751A218448B8D1B17A5DCF87') {
         throw 'Player B sysdllzf.dll contract no longer pins the successful logging-disabled hash.'
     }
-    Write-Host 'PASS: Player B known-good file contract parses and contains the critical exact-baseline entries.' -ForegroundColor Green
+    if (Test-FifaGameDir 'Q:\FIFA15-PRESERVATION-NONEXISTENT-DRIVE-PROBE') {
+        throw 'Absent-drive probe unexpectedly resolved a FIFA installation.'
+    }
+    Write-Host 'PASS: Player B known-good file contract parses, critical exact-baseline entries are present, and absent drive letters are skipped safely.' -ForegroundColor Green
 }
 
 if ($SelfTest) {
