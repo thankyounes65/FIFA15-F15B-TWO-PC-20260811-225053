@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "suite_id": "FIFA15-MM-FOUR-LEAD-SUITE-20260816",
+  "b_branch": "diagnostic/matchmaking-scenario-suite-20260816",
+  "b_package": "F15B-MM-SCENARIO-SUITE-1",
+  "guest_runtime_base_commit": "c116ce720c6193fcaf5b6a4d3a0693c16454cdc9",
+  "tested_v18_guest_head": "d36e2e2455f9c56fbb3678126c6321ac03503414",
+  "tested_v18_a_head": "58f52c1d49dc20e02b75a1e6b08d8d882fc781a1",
+  "wire_protocol_baseline_commit": "53dbaafb32030d6790beb0c16d336acd68cc1d49",
+  "attestation_gate_port": 48216,
+  "guest_runtime_change": false,
+  "scenarios": [
+    {
+      "id": 1,
+      "slug": "host-completion-to-guest",
+      "name": "One JoinCompleted(A) to B before 0x16",
+      "candidate_id": "FIFA15-MM-S1-HOST-COMPLETION-TO-GUEST",
+      "a_branch": "integration/test-matchmaking-s1-host-completion-to-guest",
+      "a_build": "build_pairing_s1_host_completion_to_guest.rs"
+    },
+    {
+      "id": 2,
+      "slug": "real-peer-promotion",
+      "name": "Self mesh registers; real peer edge promotes",
+      "candidate_id": "FIFA15-MM-S2-REAL-PEER-PROMOTION",
+      "a_branch": "integration/test-matchmaking-s2-real-peer-promotion",
+      "a_build": "build_pairing_s2_real_peer_promotion.rs"
+    },
+    {
+      "id": 3,
+      "slug": "single-gsu",
+      "name": "Keep first GSU; suppress second peer-edge replay",
+      "candidate_id": "FIFA15-MM-S3-SINGLE-GSU",
+      "a_branch": "integration/test-matchmaking-s3-single-gsu",
+      "a_build": "build_pairing_s3_single_gsu.rs"
+    },
+    {
+      "id": 4,
+      "slug": "late-single-gsu",
+      "name": "Move the single B GSU to the real peer edge",
+      "candidate_id": "FIFA15-MM-S4-LATE-SINGLE-GSU",
+      "a_branch": "integration/test-matchmaking-s4-late-single-gsu",
+      "a_build": "build_pairing_s4_late_single_gsu.rs"
+    }
+  ]
+}
