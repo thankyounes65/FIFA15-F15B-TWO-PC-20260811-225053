@@ -1,56 +1,63 @@
-# FIFA15 Player B Working-Server Parity
+# FIFA15 Player B Working-Server PID Promotion v2
 
-**Subsystem:** FUT Online Single Match matchmaking - NotifyGameSetup conformance to a real working server
+**Subsystem:** FUT Online Single Match matchmaking — post-GameSetup mesh identity and promotion lifecycle.
 
-**Purpose:** Player A's relay now sends a `NotifyGameSetup` that matches a captured, **working** FIFA 15 server field for field. This run measures whether the clients get further than they did before. Player B's job is only to be a normal second client.
+**Player B branch:** `integration/test-matchmaking-working-server-pid-promotion-v2`
 
-**Player B branch:** `integration/test-matchmaking-working-server-parity-v1`
+**Player A required branch:** `thankyounes65/fifa15-relay-clean` / `integration/test-matchmaking-working-server-pid-promotion-v2`
 
-**Player A required branch:** `thankyounes65/fifa15-relay-clean` / `integration/test-matchmaking-working-server-parity-v1`
+**Player A build:** `build_pairing_working_server_pid_promotion_v2.rs`
 
-**No instrumentation.** Nothing is attached to `fifa15.exe` on this machine. There is no Frida, no Interceptor, no Stalker, no injected DLL, and no Python dependency to install. Run 20260817 crashed FIFA on **both** machines while Frida was attached, so it is gone. Progress is measured entirely from Player A's relay log, because every Blaze message both clients send crosses that relay.
+**Candidate/package:** `FIFA15-MM-WORKING-SERVER-PID-PROMOTION-V2` / `F15B-MM-WORKING-SERVER-PID-PROMOTION-V2`.
 
-**Package contract (unchanged):** portable extracted folder. `requires_git_checkout=false`, `sends_exact_repo_commit=false`, `portable_extracted_folder_supported=true`. No Git and no development environment is needed.
+**No instrumentation.** Nothing is attached to `fifa15.exe` on either machine. Player B remains a normal second client using the already-proven Tailscale/hosts/loopback/LSX/certificate/evidence stack. Retail `fifa15.exe` SHA-256 remains `3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB` and no game file is modified.
 
-**Binary/runtime state:** `PLAYER-B-KNOWN-GOOD.json` and `VERIFY-PLAYER-B-GAME-FILES.ps1` remain authoritative. Retail `fifa15.exe` SHA-256 `3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB`. **No game file is modified.** The existing boot, Tailscale, hosts-routing, loopback-forwarder, LSX, certificate-patch and network-observer stack is unchanged.
+## Exact hypothesis
 
-**What changed on Player A**, taken from the capture of the working server and detailed in `docs/MATCHMAKING-WORKING-SERVER-GAMESETUP-DIFF.md`:
+The preserved parity attempt `20260817-033118` advanced through GameSetup, four mesh requests, host Finalize, client `GSTA=130`, sustained telemetry and bidirectional UDP, but every mesh request resolved `target_user_id=unknown` because authenticated self `CGID/SCG` still used fabricated `1515100001/2` while parity GameSetup correctly published target `CONG/UGID/TCG` using full-width player PID.
 
-| field | was | now (matches working server) |
-| --- | --- | --- |
-| `PROS[i].CONG` | fabricated group `1515100001/2` | the player's own Blaze id |
-| `PROS[i].UGID` | `objid(0,0,0)` | `objid(30722, 2, PID)` |
-| `PHST.CONG` / `THST.CONG` | fabricated group | `HPID` |
-| `GSTA` | `130` up front | `1`; the client drives 130 itself |
-| `STAT` | `4` host / `2` guest | `2` for both |
-| `TCAP` / `VOIP` | `1` / `2` | `0` / `0` |
-| `GID` | 56-bit `0xC0FFEE…` | 24-bit, `SEED == GID`, `GNAM == UUID == "game"+GID` |
-| top level | `GAME PROS QUEU REAS QOSS QOSV LFPJ TELM` | `GAME PROS REAS` (ascending, as Blaze requires) |
-| dropped entirely | `COID ESNM GGTY GMRG PGID PGSR TIDS BLOB QUEU QOSS QOSV LFPJ TELM` | the working server sends none of them |
+The same run also sent an inherited `NotifyPlayerJoinCompleted (donor host setup complete)` before Finalize, while the real working FIFA 15 capture starts both players at `STAT=2` and sends both players' `STAT=4` plus both `JoinCompleted` notifications only after the client requests `GSTA=130`.
 
-**Exact actions:** run `RUN-FIFA15-F15B.bat` as Administrator while Player A waits in its peer gate. When both clients are up, enter FUT Online Single Match; **A searches first, B second**. Do not cancel, retry, or pick any old scenario. Close FIFA normally when the attempt resolves.
+Player A v2 therefore changes one causal lifecycle chain:
 
-**Stale helpers:** the launcher reclaims anything a previous crashed run left behind before starting its own. An unrelated process holding a recycled PID is never killed. The operator never has to kill a PID by hand.
+1. full-width PID is the connection-group id on authenticated CGID/SCG and GameSetup CONG/UGID/TCG;
+2. PID TCG resolves to the real paired user so UpdateMeshConnection enters mesh state;
+3. neither host nor joiner is completed during setup;
+4. promotion requires both a genuine cross-player CONNECTED edge and client-owned `GSTA=130`;
+5. the release bundle is one-shot and ordered `GSTA130 -> STAT4(A/B) -> JoinCompleted(A/B)`.
 
-**Evidence:** this package writes `runs/matchmaking-working-server-parity/player-b/<timestamp>/RUN-MANIFEST.txt`, plus the usual network-observer, forwarder and diagnostic logs. `COLLECT-PLAYER-B-EVIDENCE.ps1` runs automatically at the end - **including after a crash** - and drops one ZIP on the Desktop containing the manifest, the Desktop logs, any `fifa15` crash dump (recording the path instead of copying when it is multi-GB), Windows Error Reporting records and recent Application error events. Send that ZIP.
+The documented remaining working-server notification differences (“Lead 4”) are deliberately **not** enabled in this run.
 
-**How progress is judged** (on Player A, from the relay log):
+## Exact actions
 
-```
-python scripts/score-matchmaking-progress.py --relay-log <run>/relay-full.log
-```
+1. Player A uses the Universal Branch Tester and selects `integration/test-matchmaking-working-server-pid-promotion-v2`.
+2. Player A must require `launch\VERIFY-BUILD.bat` to PASS before FIFA starts.
+3. Player B uses this exact branch/package and runs `RUN-FIFA15-F15B.bat` as Administrator.
+4. Require the peer gate to accept exact candidate/package `FIFA15-MM-WORKING-SERVER-PID-PROMOTION-V2` / `F15B-MM-WORKING-SERVER-PID-PROMOTION-V2`.
+5. Both enter FUT -> Online Single Match. **A searches first, B searches second.**
+6. Do not cancel or retry after pairing.
+7. If both reach the shared lobby, B readies first, then A. Continue toward kickoff only while stable.
+8. If the joiner remains loading, leave the state visible briefly so evidence flushes, then close FIFA normally.
 
-Baseline to beat, from the last pre-parity run `20260817-013523`:
+## Primary discriminator
 
-| milestone | before | working server |
-| --- | ---: | ---: |
-| StartMatchmaking answered | 2 | 2 |
-| NotifyGameSetup delivered | 2 | 2 |
-| **updateMeshConnection received** | **1** | **3** |
-| **telemetry reports** | **0** | **~2170** |
+The run should produce this exact chain in Player A evidence:
 
-`updateMeshConnection` is the decisive one: the client only sends it once it can resolve the peer's connection group out of the roster, which is exactly what `CONG`/`UGID` now carry.
+`TCG=<peer PID> -> target_user_id=<peer PID> -> matchmaking_mesh_link_recorded -> client GSTA130 -> matchmaking_working_server_pre_game_released -> matchmaking_working_server_promotion_bundle`
 
-**Success:** more `updateMeshConnection` than before, and any telemetry at all, would be real forward progress. A shared lobby would be more. **Neither is required for the run to be informative** - a changed scorecard is the measurement.
+and the relay should show two promotion-time `NotifyGamePlayerStateChange`/STAT4 notifications plus two `NotifyPlayerJoinCompleted` notifications, with **no** `donor host setup complete` notification.
 
-**VOID:** wrong A/B branch, known-good file verification failure, peer attestation failure, stale FIFA process, missing relay log, or any reintroduction of in-process instrumentation on either machine.
+## PASS / PARTIAL / FAIL
+
+- **PASS for Leads 1–3:** PID mesh targets resolve, a real peer edge is recorded, the GSTA130 gate releases, both players receive STAT4 + JoinCompleted, and both clients reach the same usable pre-match lobby.
+- **PARTIAL:** the full Leads 1–3 chain is proven but the lobby still fails. Freeze those findings as Confirmed and move investigation to documented Lead 4 / the first later divergence; do not reopen transport or connection-group identity.
+- **CLEAN FAIL:** exact v2 identity and promotion bundle execute without transport regression but the old loading boundary remains. Leads 1–3 are then fixed-but-not-sufficient.
+- **VOID:** wrong A/B branch or package, failed preflight, peer-gate rejection, wrong search order, stale process, crash before relevant GameSetup/mesh/GSTA boundary, missing evidence, or instrumentation reintroduced.
+
+## Required evidence
+
+Player A: exact run manifest, `relay-full.log`, newest `fifa15-trace-*.jsonl`, scorecard, gameplay UDP summary and crash summary if applicable.
+
+Player B: automatic evidence ZIP plus exact attempt manifest. Preserve any crash/WER evidence.
+
+Do not exercise consumables, club items, Legends, tournaments, another matchmaking scenario, Lead 4 notification experiments, alternate GSU timing, or native instrumentation in this launch.
