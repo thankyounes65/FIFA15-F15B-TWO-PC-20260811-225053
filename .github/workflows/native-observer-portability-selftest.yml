@@ -3,7 +3,7 @@ name: Player B native observer portability self-test
 on:
   push:
     branches:
-      - integration/test-matchmaking-native-observer-v1
+      - integration/test-matchmaking-native-observer-v2
   workflow_dispatch:
 
 jobs:
@@ -53,6 +53,40 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\RUN-FIFA15-F15B-NATIVE-OBSERVER.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate observer probes and classifier
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          python -m pip install --disable-pip-version-check --no-input capstone
+          python .\validate-native-observer-v2-probes.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .\matchmaking-native-observer-v2.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .\classify-native-observer-v2-evidence.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Forbid Frida Stalker execution in the package
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          # Stalker crashed fifa15.exe inside its own RWX code cache in run
+          # 20260817-001802 and must never come back. The observer's own
+          # --self-test already proves the RENDERED script is Stalker-free;
+          # this scans the remaining executable surface. The observer source is
+          # excluded here because it legitimately NAMES Stalker in its guard
+          # list and in the docstring recording why Stalker was removed.
+          $files = @(Get-ChildItem -Recurse -File -Include *.js,*.ps1 |
+            Where-Object { $_.FullName -notmatch 'observer-deps' })
+          $hits = @($files | Select-String -Pattern 'Stalker\.follow|Stalker\.unfollow|putCallout')
+          if ($hits.Count -gt 0) {
+            throw "Frida Stalker reintroduced: $(($hits | ForEach-Object { $_.Path }) -join '; ')"
+          }
+          $table = Get-Content -LiteralPath .\fifa15-native-observer-v2-probes.json -Raw | ConvertFrom-Json
+          if ($table.stalker_used -ne $false) { throw 'probe table no longer declares stalker_used=false' }
+          Write-Host 'PASS: no Frida Stalker execution anywhere in the Player B package.'
 
       - name: Bootstrap pinned package-local Frida
         shell: powershell

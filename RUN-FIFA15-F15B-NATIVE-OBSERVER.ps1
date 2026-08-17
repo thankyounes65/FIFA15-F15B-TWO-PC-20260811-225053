@@ -8,7 +8,9 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2
 
 $Root = Split-Path -Parent $PSCommandPath
-$Observer = Join-Path $Root 'matchmaking-native-observer.py'
+$Observer = Join-Path $Root 'matchmaking-native-observer-v2.py'
+$ProbeValidator = Join-Path $Root 'validate-native-observer-v2-probes.py'
+$Classifier = Join-Path $Root 'classify-native-observer-v2-evidence.py'
 $Attest = Join-Path $Root 'matchmaking-native-observer-attest.ps1'
 $GameVerify = Join-Path $Root 'VERIFY-PLAYER-B-GAME-FILES.ps1'
 $RuntimeTest = Join-Path $Root 'RUNTIME-TEST.md'
@@ -19,8 +21,9 @@ $OriginalPythonPath = [string]$env:PYTHONPATH
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
 $attempt = Join-Path $Root ("runs\matchmaking-native-observer\player-b\$stamp")
-$jsonl = Join-Path $attempt 'native-observer.jsonl'
-$text = Join-Path $attempt 'native-observer.txt'
+$jsonl = Join-Path $attempt 'matchmaking-native-observer-v2.jsonl'
+$text = Join-Path $attempt 'matchmaking-native-observer-v2.txt'
+$verdict = Join-Path $attempt 'OBSERVER-VERDICT.txt'
 $manifest = Join-Path $attempt 'OBSERVER-RUN-MANIFEST.txt'
 
 $observerProcess = $null
@@ -39,7 +42,10 @@ function Run([string]$File, [string[]]$Arguments = @()) {
 
 function Assert-Files {
     foreach ($name in @(
-        'matchmaking-native-observer.py',
+        'matchmaking-native-observer-v2.py',
+        'fifa15-native-observer-v2-probes.json',
+        'validate-native-observer-v2-probes.py',
+        'classify-native-observer-v2-evidence.py',
         'matchmaking-native-observer-attest.ps1',
         'diagnostic-run.ps1',
         'guest-network-observer.ps1',
@@ -130,15 +136,18 @@ Assert-Files
 
 if ($SelfTest) {
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$GameVerify,'-SelfTest')
+    Run 'python' @($ProbeValidator,'--self-test')
     Run 'python' @($Observer,'--self-test')
+    Run 'python' @($Classifier,'--self-test')
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Attest,'-SelfTest')
+    Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $Root 'guest-network-observer.ps1'),'-SelfTest')
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
-    foreach ($marker in @('FridaVersion = ''17.9.11''','Ensure-PinnedFrida','--only-binary=:all:','frida==$FridaVersion','.observer-deps')) {
+    foreach ($marker in @('FridaVersion = ''17.9.11''','Ensure-PinnedFrida','--only-binary=:all:','frida==$FridaVersion','.observer-deps','-Reset')) {
         if (-not $source.Contains($marker)) {
             throw "Native-observer runner lost dependency-bootstrap marker: $marker"
         }
     }
-    Write-Host 'PASS: Player B native-observer runner is portable from an extracted folder, has no scenario selector, safely skips absent FIFA drive letters, and carries a pinned package-local Frida bootstrap.' -ForegroundColor Green
+    Write-Host 'PASS: Player B native-observer v2 runner is Stalker-free, probe-validated, portable from an extracted folder, has no scenario selector, safely skips absent FIFA drive letters, self-heals stale helper state, and carries a pinned package-local Frida bootstrap.' -ForegroundColor Green
     exit 0
 }
 
@@ -153,7 +162,9 @@ New-Item -ItemType Directory -Force -Path $attempt | Out-Null
 @(
     'FIFA15 matchmaking native observer - Player B',
     "started_utc=$((Get-Date).ToUniversalTime().ToString('o'))",
-    'branch=integration/test-matchmaking-native-observer-v1',
+    'branch=integration/test-matchmaking-native-observer-v2',
+    'instrumentation=frida_interceptor_readonly_byte_verified',
+    'stalker_used=false',
     'package_mode=portable-extracted-folder',
     'requires_git_checkout=false',
     "frida_version=$FridaVersion",
@@ -161,8 +172,8 @@ New-Item -ItemType Directory -Force -Path $attempt | Out-Null
     'wire_change=false',
     'observer_only=true',
     'scenario_selection=false',
-    'target_chain=0x47BCC7C>0x479EBE9>0x479BC0B>0x3A04A32>0x3715903',
-    'target_0x0b=0x47BE327..0x47BE448',
+    'target_chain=0x47BCC76(callsite for 0x47BCC7C)>0x479EBE9>0x479B785>0x479BC0B>0x3A04A32>0x3A04A65>0x3715903',
+    'target_0x0b=0x47BE327 entry, 0x47BE3D9 result4-destroy, 0x47BE416 virtual+8 arm',
     'target_cardsdll=0x3BAB0'
 ) | Set-Content -LiteralPath $manifest -Encoding UTF8
 
@@ -170,8 +181,14 @@ try {
     $stage = 'game_file_verify'
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$GameVerify)
 
+    $stage = 'probe_validation'
+    Run 'python' @($ProbeValidator,'--self-test')
+
     $stage = 'observer_selftest'
     Run 'python' @($Observer,'--self-test')
+
+    $stage = 'classifier_selftest'
+    Run 'python' @($Classifier,'--self-test')
 
     $stage = 'attestation_selftest'
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Attest,'-SelfTest')
@@ -185,6 +202,12 @@ try {
     $stage = 'tailscale_bootstrap'
     $tailscaleAttempted = $true
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $Root 'tailscale-bootstrap.ps1'))
+
+    # Reclaim anything a previous crashed or aborted run left behind, so the
+    # operator never has to kill a stale PID by hand.
+    $stage = 'stale_helper_reset'
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'guest-network-observer.ps1') -Reset
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'loopback-relay-forwarder.ps1') -Stop 2>$null | Out-Null
 
     $stage = 'forwarder_start'
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $Root 'loopback-relay-forwarder.ps1'),'-Start')
@@ -263,7 +286,14 @@ try {
         "observer_jsonl=$jsonl",
         "observer_text=$text"
     )
-    foreach ($path in @($jsonl,$text)) {
+    if (Test-Path -LiteralPath $jsonl -PathType Leaf) {
+        try {
+            & python $Classifier '--player-a' $jsonl 2>&1 | Set-Content -LiteralPath $verdict -Encoding UTF8
+        } catch {
+            Set-Content -LiteralPath $verdict -Encoding UTF8 -Value "classifier failed: $($_.Exception.Message)"
+        }
+    }
+    foreach ($path in @($jsonl,$text,$verdict)) {
         if (Test-Path -LiteralPath $path -PathType Leaf) {
             $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
             Add-Content -LiteralPath $manifest -Encoding UTF8 -Value ("evidence=$([IO.Path]::GetFileName($path))|sha256=$hash")
@@ -273,7 +303,7 @@ try {
 
 Write-Host ''
 Write-Host '====================================================================' -ForegroundColor Cyan
-Write-Host '  PLAYER B NATIVE OBSERVER RUN FINISHED' -ForegroundColor Cyan
+Write-Host '  PLAYER B NATIVE OBSERVER v2 RUN FINISHED' -ForegroundColor Cyan
 Write-Host '====================================================================' -ForegroundColor Cyan
 Write-Host "Evidence: $attempt" -ForegroundColor Green
 Write-Host 'No scenario was selected. Player B boot/network behavior is unchanged.' -ForegroundColor Gray

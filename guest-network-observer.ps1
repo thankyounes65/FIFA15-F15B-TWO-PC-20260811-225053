@@ -2,6 +2,7 @@
 param(
     [Parameter(ParameterSetName='Start', Mandatory=$true)][switch]$Start,
     [Parameter(ParameterSetName='Stop', Mandatory=$true)][switch]$Stop,
+    [Parameter(ParameterSetName='Reset', Mandatory=$true)][switch]$Reset,
     [Parameter(ParameterSetName='Monitor', Mandatory=$true)][switch]$Monitor,
     [Parameter(ParameterSetName='SelfTest')][switch]$SelfTest,
     [Parameter(ParameterSetName='Stop')][switch]$AppendToNewestDiag
@@ -164,13 +165,42 @@ function Invoke-Monitor {
     }
 }
 
-function Invoke-Start {
+# A previous run that crashed or was killed leaves this state file behind. The
+# PID in it may be dead, or - worse - recycled by an unrelated process. Neither
+# case may ever require the operator to hunt down a PID by hand, so identity is
+# confirmed against the recorded start time before anything is reclaimed.
+function Test-IsOurObserver($State) {
+    if (-not $State -or -not $State.pid) { return $false }
+    $proc = Get-Process -Id ([int]$State.pid) -ErrorAction SilentlyContinue
+    if (-not $proc) { return $false }
+    if ($proc.ProcessName -ne 'powershell' -and $proc.ProcessName -ne 'pwsh') { return $false }
+    if (-not $State.started_utc) { return $false }
+    try {
+        $recorded = [datetime]::Parse($State.started_utc).ToUniversalTime()
+        $actual = $proc.StartTime.ToUniversalTime()
+        # A recycled PID belongs to a process that started at a different time.
+        if ([math]::Abs(($actual - $recorded).TotalSeconds) -gt 120) { return $false }
+    } catch { return $false }
+    return $true
+}
+
+function Clear-StaleObserver {
     $state = Read-State
-    if ($state -and $state.pid) {
-        $existing = Get-Process -Id ([int]$state.pid) -ErrorAction SilentlyContinue
-        if ($existing) { throw "a Player B network observer is already running at PID $($state.pid)" }
+    if (-not $state) { return 'none' }
+    if (Test-IsOurObserver $state) {
+        Info "reclaiming an orphaned Player B network observer at PID $($state.pid)"
+        Stop-Process -Id ([int]$state.pid) -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 250
         Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue
+        return 'reclaimed'
     }
+    Info 'discarding stale Player B network observer state (dead or recycled PID)'
+    Remove-Item -LiteralPath $StatePath -Force -ErrorAction SilentlyContinue
+    return 'discarded'
+}
+
+function Invoke-Start {
+    Clear-StaleObserver | Out-Null
     $proc = Start-Process powershell.exe -ArgumentList @(
         '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`"",'-Monitor'
     ) -WindowStyle Hidden -PassThru
@@ -230,15 +260,21 @@ function Invoke-SelfTest {
     foreach ($marker in @('fifa_lsx_connected=true','fifa_blaze_connected=true','portable-lsx-responder\.ps1','42128','AppendToNewestDiag')) {
         if ($source -notmatch [regex]::Escape($marker)) { throw "missing network-observer marker: $marker" }
     }
-    Write-Host 'PASS: Player B network observer parses and contains LSX/Blaze boundary classification; no processes or network state were changed.' -ForegroundColor Green
+    foreach ($marker in @('Test-IsOurObserver','Clear-StaleObserver','recycled PID')) {
+        if (-not ((Get-Content -LiteralPath $PSCommandPath -Raw)).Contains($marker)) {
+            throw "network observer lost stale-state self-healing marker: $marker"
+        }
+    }
+    Write-Host 'PASS: Player B network observer parses, classifies LSX/Blaze boundaries, and self-heals stale/recycled observer state without operator PID cleanup; no processes or network state were changed.' -ForegroundColor Green
 }
 
 try {
     if ($SelfTest) { Invoke-SelfTest; exit 0 }
+    if ($Reset) { $r = Clear-StaleObserver; Write-Host "NETWORK_OBSERVER_RESET=$r"; exit 0 }
     if ($Start) { Invoke-Start; exit 0 }
     if ($Stop) { exit (Invoke-Stop) }
     if ($Monitor) { Invoke-Monitor; exit 0 }
-    throw 'choose -Start, -Stop, -Monitor or -SelfTest'
+    throw 'choose -Start, -Stop, -Reset, -Monitor or -SelfTest'
 } catch {
     Fail $_.Exception.Message
 }

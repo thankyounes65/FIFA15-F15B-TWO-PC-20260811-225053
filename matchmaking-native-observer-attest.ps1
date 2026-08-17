@@ -6,9 +6,9 @@ $Root=Split-Path -Parent $PSCommandPath
 $Config=Get-Content -LiteralPath (Join-Path $Root 'APPLIANCE-CONFIG.json') -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-NATIVE-OBSERVER-V1'
-$Package='F15B-MM-NATIVE-OBSERVER-V1'
-$ExpectedBranch='integration/test-matchmaking-native-observer-v1'
+$Candidate='FIFA15-MM-NATIVE-OBSERVER-V2'
+$Package='F15B-MM-NATIVE-OBSERVER-V2'
+$ExpectedBranch='integration/test-matchmaking-native-observer-v2'
 
 function Assert-LocalState {
     if (-not $HostIp) { throw 'APPLIANCE-CONFIG.json has no host_ip' }
@@ -17,7 +17,10 @@ function Assert-LocalState {
         'RUNTIME-TEST.md',
         'RUN-FIFA15-F15B.bat',
         'RUN-FIFA15-F15B-NATIVE-OBSERVER.ps1',
-        'matchmaking-native-observer.py',
+        'matchmaking-native-observer-v2.py',
+        'fifa15-native-observer-v2-probes.json',
+        'validate-native-observer-v2-probes.py',
+        'classify-native-observer-v2-evidence.py',
         'diagnostic-run.ps1',
         'guest-network-observer.ps1',
         'VERIFY-PLAYER-B-GAME-FILES.ps1'
