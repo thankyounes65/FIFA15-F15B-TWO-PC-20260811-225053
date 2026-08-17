@@ -1,20 +1,20 @@
 {
   "format": 4,
-  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503+matchmaking-native-observer-v2-interceptor-only",
+  "package_revision": "ea-readiness-v1+loopback-forwarder-17502-17503+working-server-parity-v1-no-instrumentation",
   "role": "f15b",
-  "note": "Diagnostic-only Player B package for FIFA15-MM-NATIVE-OBSERVER-V2. The proven physical Player B boot/connect stack and the exact tested unchanged-wire relay behavior are retained. v2 replaces the v1 Frida Stalker tracer, which crashed fifa15.exe with 0xC0000005 inside Stalker's own RWX code-cache slab four seconds after Stalker.follow (run 20260817-001802). v2 uses read-only Frida Interceptor probes only: eleven byte-verified onEnter hooks that cover the full v1 diagnostic scope, never arm unless the live bytes match a blob pinned from decrypted runtime memory, and never write a register, flag, stack slot, branch or game file. It also self-heals stale helper state so a crashed run never requires manual PID cleanup.",
+  "note": "Player B package for the working-server parity test. NOTHING is attached to fifa15.exe: no Frida, no Interceptor, no Stalker, no injected DLL and no Python dependency. Run 20260817 crashed FIFA on both machines with Frida attached, so all in-process instrumentation is removed. Progress is measured from Player A's relay log instead, since every Blaze message both clients send crosses that relay. The proven Player B boot/connect stack is otherwise unchanged, and evidence collection now runs automatically even after a crash.",
   "matchmaking_overlay": {
-    "candidate_id": "FIFA15-MM-NATIVE-OBSERVER-V2",
-    "package_attestation": "F15B-MM-NATIVE-OBSERVER-V2",
-    "expected_host_branch": "integration/test-matchmaking-native-observer-v2",
-    "expected_host_build": "build_pairing_s4_late_single_gsu.rs",
+    "candidate_id": "FIFA15-MM-WORKING-SERVER-PARITY-V1",
+    "package_attestation": "F15B-MM-WORKING-SERVER-PARITY-V1",
+    "expected_host_branch": "integration/test-matchmaking-working-server-parity-v1",
+    "expected_host_build": "build_pairing_working_server_parity_v1.rs",
     "wire_protocol_baseline_commit": "7da2c4aa55ba39f2c909e0b65a0ac805016fb21e",
     "gate_port": 48216,
     "diagnostic_only": true,
     "changes_guest_boot_stack": false,
     "changes_matchmaking_wire_protocol": false,
-    "native_execution_probe": true,
-    "native_static_address_map_attestation": true,
+    "native_execution_probe": false,
+    "native_static_address_map_attestation": false,
     "requires_git_checkout": false,
     "sends_exact_repo_commit": false,
     "portable_extracted_folder_supported": true,
@@ -22,10 +22,14 @@
     "network_log_mandatory_in_bundle": true,
     "native_attestation_log_mandatory_in_bundle": true,
     "stalker_used": false,
-    "instrumentation": "frida_interceptor_readonly_byte_verified",
+    "instrumentation": "none",
     "frida_scope": "package-local",
     "modifies_game_files": false,
-    "self_heals_stale_helper_state": true
+    "self_heals_stale_helper_state": true,
+    "frida_used": false,
+    "player_a_changes_matchmaking_wire_protocol": true,
+    "progress_measured_from": "player_a_relay_log",
+    "reference_capture": "aurora15.onlyonemzy.com plaintext Blaze session"
   },
   "documentation_files": [
     "README-FIRST.txt",
@@ -35,11 +39,10 @@
   "verification_files": [
     "VERIFY-PLAYER-B-GAME-FILES.bat",
     "VERIFY-PLAYER-B-GAME-FILES.ps1",
-    "matchmaking-native-observer-attest.ps1",
-    "validate-native-observer-v2-probes.py",
-    "classify-native-observer-v2-evidence.py",
+    "matchmaking-working-server-parity-attest.ps1",
     "classify-network-observer-v16.ps1",
-    "collect-evidence-v16.ps1"
+    "collect-evidence-v16.ps1",
+    "COLLECT-PLAYER-B-EVIDENCE.ps1"
   ],
   "runtime_features": {
     "exact_restore": "restore-v3",
@@ -65,12 +68,5 @@
       "bytes": 38354432,
       "sha256": "D2EB69E103B08A5B77DE9D7CB8555541AA99F7DFC6048850B2286A1048C885F9"
     }
-  ],
-  "observer_files": [
-    "RUN-FIFA15-F15B-NATIVE-OBSERVER.ps1",
-    "matchmaking-native-observer-v2.py",
-    "fifa15-native-observer-v2-probes.json",
-    "validate-native-observer-v2-probes.py",
-    "classify-native-observer-v2-evidence.py"
   ]
 }

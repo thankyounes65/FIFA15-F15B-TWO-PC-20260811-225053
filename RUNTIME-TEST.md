@@ -1,43 +1,56 @@
-# FIFA15 Player B Matchmaking Native Observer
+# FIFA15 Player B Working-Server Parity
 
-**Subsystem:** FUT Online Single Match matchmaking - logical joiner MatchSession success boundary
+**Subsystem:** FUT Online Single Match matchmaking - NotifyGameSetup conformance to a real working server
 
-**Purpose:** one synchronized, read-only, unchanged-wire capture with Player A. There is no scenario selector and no protocol candidate on Player B.
+**Purpose:** Player A's relay now sends a `NotifyGameSetup` that matches a captured, **working** FIFA 15 server field for field. This run measures whether the clients get further than they did before. Player B's job is only to be a normal second client.
 
-**Player B branch:** `integration/test-matchmaking-native-observer-v2`
+**Player B branch:** `integration/test-matchmaking-working-server-parity-v1`
 
-**Player A required branch:** `thankyounes65/fifa15-relay-clean` / `integration/test-matchmaking-native-observer-v2`
+**Player A required branch:** `thankyounes65/fifa15-relay-clean` / `integration/test-matchmaking-working-server-parity-v1`
 
-**Why v2 replaces v1:** v1 is **VOID**. In run `20260817-001802` Player A's v1 observer armed correctly and its two Interceptor hooks ran for ~103 s, then `Stalker.follow` was called on the GameSetup thread (tid 43904) and `fifa15.exe` died 4 s later with `0xC0000005` on that same thread, at `RIP=0x1199C110F` inside Frida Stalker's own 4 MB `PRIVATE`/`RWX` code-cache slab (`0x1199C0000+0x400000`), executing a relocated `mov rax,[rip+0xB84850]` whose effective address `0x11A545966` fell in the `FREE`/`NOACCESS` region that begins exactly at the end of that slab. `frida-agent.dll` is in the dump's module list and the faulting RIP is in none of the 139 loaded modules, so no `fifa15.exe` code was involved. Zero Stalker callouts ever fired. Player B carried the same Stalker design and would have failed the same way. **v2 removes Stalker entirely and keeps only Frida Interceptor**, which the same run proved stable in this process.
+**No instrumentation.** Nothing is attached to `fifa15.exe` on this machine. There is no Frida, no Interceptor, no Stalker, no injected DLL, and no Python dependency to install. Run 20260817 crashed FIFA on **both** machines while Frida was attached, so it is gone. Progress is measured entirely from Player A's relay log, because every Blaze message both clients send crosses that relay.
 
-**Package contract (unchanged):** portable extracted folder. `requires_git_checkout=false`, `sends_exact_repo_commit=false`, `portable_extracted_folder_supported=true`. No Git and no development environment is needed on Player B. Frida is still used, is still pinned, and is still installed **package-locally** into `.observer-deps`; nothing is installed globally.
+**Package contract (unchanged):** portable extracted folder. `requires_git_checkout=false`, `sends_exact_repo_commit=false`, `portable_extracted_folder_supported=true`. No Git and no development environment is needed.
 
-**Binary/runtime state:** existing `PLAYER-B-KNOWN-GOOD.json` and `VERIFY-PLAYER-B-GAME-FILES.ps1` remain authoritative for the Player B game/DLL set. The observer targets retail `fifa15.exe` SHA-256 `3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB` and uses the existing boot, Tailscale, loopback-forwarder, LSX, certificate-patch and network-observer stack unchanged. **No game file is modified** - there is no byte patch, code cave or detour written to disk; all instrumentation is in-process and vanishes when FIFA exits.
+**Binary/runtime state:** `PLAYER-B-KNOWN-GOOD.json` and `VERIFY-PLAYER-B-GAME-FILES.ps1` remain authoritative. Retail `fifa15.exe` SHA-256 `3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB`. **No game file is modified.** The existing boot, Tailscale, hosts-routing, loopback-forwarder, LSX, certificate-patch and network-observer stack is unchanged.
 
-**Observer targets (11 read-only Interceptor probes):**
+**What changed on Player A**, taken from the capture of the working server and detailed in `docs/MATCHMAKING-WORKING-SERVER-GAMESETUP-DIFF.md`:
 
-| probe | module + RVA | answers |
+| field | was | now (matches working server) |
 | --- | --- | --- |
-| `gamesetup_virtual_success_callsite` | fifa15 `0x47BCC76` | GameSetup virtual-success callsite (anchor 2 instructions before `0x47BCC7C call [rax+8]`, same basic block) |
-| `matchmaking_operation_plus8` | fifa15 `0x479EBE9` | operation `+8` continuation |
-| `matchmaking_operation_plus28` | fifa15 `0x479B785` | adjacent operation `+0x28` hop |
-| `matchmaking_reas3_result_apply` | fifa15 `0x479BC0B` | discriminator-3 MatchSession result application |
-| `matchsession_bridge_entry` | fifa15 `0x3A04A32` | bridge, result code, incoming session, `bridge+0x98` active session, **both compared MSIDs** |
-| `matchsession_bridge_owner_match` | fifa15 `0x3A04A65` | fires **only** when `*active == *incoming`, i.e. the incoming MSID still owns the bridge |
-| `event_matchup_success_emitter` | fifa15 `0x3715903` | whether `EVENT_MATCHUP_SUCCESS` is emitted |
-| `zero_b_window_entry` | fifa15 `0x47BE327` | the `0x0B` window was entered at all |
-| `zero_b_result4_destroy` | fifa15 `0x47BE3D9` | **`0x0B` = result-4 destroy** |
-| `zero_b_virtual_plus8_arm` | fifa15 `0x47BE416` | **`0x0B` = virtual `+8` arm**, plus the two gate bytes deciding whether `call [rax+8]` executes |
-| `cards_get_squad_list` | CardsDLLzf `0x3BAB0` | GetSquadList entry on Player B |
+| `PROS[i].CONG` | fabricated group `1515100001/2` | the player's own Blaze id |
+| `PROS[i].UGID` | `objid(0,0,0)` | `objid(30722, 2, PID)` |
+| `PHST.CONG` / `THST.CONG` | fabricated group | `HPID` |
+| `GSTA` | `130` up front | `1`; the client drives 130 itself |
+| `STAT` | `4` host / `2` guest | `2` for both |
+| `TCAP` / `VOIP` | `1` / `2` | `0` / `0` |
+| `GID` | 56-bit `0xC0FFEE…` | 24-bit, `SEED == GID`, `GNAM == UUID == "game"+GID` |
+| top level | `GAME PROS QUEU REAS QOSS QOSV LFPJ TELM` | `GAME PROS REAS` (ascending, as Blaze requires) |
+| dropped entirely | `COID ESNM GGTY GMRG PGID PGSR TIDS BLOB QUEU QOSS QOSV LFPJ TELM` | the working server sends none of them |
 
-**Safety/evidence rule:** every probe verifies its target's live bytes against a blob pinned from decrypted runtime memory and is **never armed unless the bytes match** (`fifa15.exe` is packed, so on-disk bytes are not the executed bytes). No probe alters registers, flags, stack, branches, network messages or lifecycle state. Per-probe emission is capped at 200 with explicit saturation reporting. A probe that was never armed is reported **Not Reached**, never as a negative result.
+**Exact actions:** run `RUN-FIFA15-F15B.bat` as Administrator while Player A waits in its peer gate. When both clients are up, enter FUT Online Single Match; **A searches first, B second**. Do not cancel, retry, or pick any old scenario. Close FIFA normally when the attempt resolves.
 
-**Exact actions:** run `RUN-FIFA15-F15B.bat` as Administrator while Player A is waiting in its matching observer peer gate. After both FIFA clients are launched, enter FUT Online Single Match; **A searches first and B second**. Do not cancel, retry, or select any old scenario. Close FIFA normally after the first divergence window is captured.
+**Stale helpers:** the launcher reclaims anything a previous crashed run left behind before starting its own. An unrelated process holding a recycled PID is never killed. The operator never has to kill a PID by hand.
 
-**Stale helpers:** the launcher now reclaims anything a previous crashed or aborted run left behind before starting its own helpers. The `a Player B network observer is already running` failure mode is resolved: observer identity is confirmed against the recorded start time, a genuinely orphaned helper is stopped automatically, and a dead or recycled PID is discarded. An unrelated process that happens to hold a recycled PID is **never** killed. Under normal operation the operator never has to kill a PID by hand.
+**Evidence:** this package writes `runs/matchmaking-working-server-parity/player-b/<timestamp>/RUN-MANIFEST.txt`, plus the usual network-observer, forwarder and diagnostic logs. `COLLECT-PLAYER-B-EVIDENCE.ps1` runs automatically at the end - **including after a crash** - and drops one ZIP on the Desktop containing the manifest, the Desktop logs, any `fifa15` crash dump (recording the path instead of copying when it is multi-GB), Windows Error Reporting records and recent Application error events. Send that ZIP.
 
-**Diagnostic success:** Player B evidence proves whether its MatchSession bridge still owns the incoming MSID, whether `EVENT_MATCHUP_SUCCESS` is emitted, which `0x0B` lifetime path executes, and whether CardsDLL `GetSquadList` is entered. UI success is useful evidence but is not required for the diagnostic to resolve the question.
+**How progress is judged** (on Player A, from the relay log):
 
-**Evidence:** `runs/matchmaking-native-observer/player-b/<timestamp>/` containing `matchmaking-native-observer-v2.jsonl`, `matchmaking-native-observer-v2.txt`, `OBSERVER-VERDICT.txt` and `OBSERVER-RUN-MANIFEST.txt`, plus normal Player B network/diagnostic artifacts from the inherited stack, all bound into the evidence ZIP.
+```
+python scripts/score-matchmaking-progress.py --relay-log <run>/relay-full.log
+```
 
-**VOID:** wrong A/B branch, known-good file verification failure, peer attestation failure, observer not live, any `probe_byte_mismatch` on a relied-upon probe, Frida/script error, stale FIFA process, truncated decision-window evidence, or **any reintroduction of Stalker**.
+Baseline to beat, from the last pre-parity run `20260817-013523`:
+
+| milestone | before | working server |
+| --- | ---: | ---: |
+| StartMatchmaking answered | 2 | 2 |
+| NotifyGameSetup delivered | 2 | 2 |
+| **updateMeshConnection received** | **1** | **3** |
+| **telemetry reports** | **0** | **~2170** |
+
+`updateMeshConnection` is the decisive one: the client only sends it once it can resolve the peer's connection group out of the roster, which is exactly what `CONG`/`UGID` now carry.
+
+**Success:** more `updateMeshConnection` than before, and any telemetry at all, would be real forward progress. A shared lobby would be more. **Neither is required for the run to be informative** - a changed scorecard is the measurement.
+
+**VOID:** wrong A/B branch, known-good file verification failure, peer attestation failure, stale FIFA process, missing relay log, or any reintroduction of in-process instrumentation on either machine.

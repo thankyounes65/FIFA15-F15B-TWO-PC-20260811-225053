@@ -11,7 +11,7 @@ echo   Observes MatchSession success, 0x0B lifetime, and CardsDLL squad entry.
 echo ====================================================================
 echo.
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0RUN-FIFA15-F15B-NATIVE-OBSERVER.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0RUN-FIFA15-F15B-PARITY.ps1"
 set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" pause
 endlocal & exit /b %RC%
