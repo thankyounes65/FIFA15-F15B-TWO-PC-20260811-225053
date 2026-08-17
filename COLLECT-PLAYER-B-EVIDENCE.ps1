@@ -6,7 +6,12 @@ the operator could not find any evidence. This never requires Git, never needs
 the run to have succeeded, and never deletes anything.
 
 It gathers, if present:
-  - the observer evidence folder(s) under runs\matchmaking-native-observer\player-b
+  - EVERY per-attempt evidence folder under runs\<any-experiment>\player-b.
+    This is deliberately not a hardcoded experiment name: each candidate writes
+    its RUN-MANIFEST.txt under its own runs\<experiment>\player-b\<stamp>\ path,
+    and the previous hardcoded runs\matchmaking-native-observer\player-b lookup
+    silently shipped a ZIP with no attempt manifest in it whenever the current
+    candidate had a different name.
   - the network observer / forwarder / diagnostic logs this package writes to the Desktop
   - fifa15.exe crash dumps from the per-user CrashDumps folder
   - Windows Error Reporting records that name fifa15.exe
@@ -50,12 +55,27 @@ function Copy-Into([string]$Source, [string]$SubDir) {
 }
 
 if ($SelfTest) {
+    $selfText = Get-Content -LiteralPath $PSCommandPath -Raw
     foreach ($marker in @('matchmaking-native-observer', 'CrashDumps', 'ReportArchive', 'Compress-Archive')) {
-        if (-not ((Get-Content -LiteralPath $PSCommandPath -Raw)).Contains($marker)) {
+        if (-not $selfText.Contains($marker)) {
             throw "collector lost marker: $marker"
         }
     }
-    Write-Host 'PASS: Player B evidence collector parses, needs no Git, and searches observer evidence, Desktop logs, crash dumps and WER records.' -ForegroundColor Green
+    # Fail closed if the attempt scan is ever narrowed back to one hardcoded
+    # experiment name. That regression shipped ZIPs with no RUN-MANIFEST.txt.
+    foreach ($required in @(
+        "`$runsRoot = Join-Path `$Root 'runs'",
+        "Join-Path `$_.FullName 'player-b'",
+        "`$found['player_b_attempt_folders'] = `$attempts.Count"
+    )) {
+        if (-not $selfText.Contains($required)) {
+            throw "collector no longer scans every runs\<experiment>\player-b folder: $required"
+        }
+    }
+    if ($selfText.Contains("Join-Path `$Root 'runs\matchmaking-native-observer\player-b'")) {
+        throw 'collector reintroduced the hardcoded single-experiment evidence path.'
+    }
+    Write-Host 'PASS: Player B evidence collector parses, needs no Git, and searches every runs\<experiment>\player-b attempt folder, Desktop logs, crash dumps and WER records.' -ForegroundColor Green
     exit 0
 }
 
@@ -65,20 +85,32 @@ $found = [ordered]@{}
 Head 'FIFA 15 Player B - evidence collection'
 Note "package root: $Root"
 
-# 1. Observer evidence produced by the run itself.
-$observerRoot = Join-Path $Root 'runs\matchmaking-native-observer\player-b'
-if (Test-Path -LiteralPath $observerRoot) {
-    $attempts = @(Get-ChildItem -LiteralPath $observerRoot -Directory | Sort-Object Name)
-    Note "observer attempts found: $($attempts.Count)"
-    foreach ($a in $attempts) {
-        [void](Copy-Into $a.FullName 'observer')
-        Note "  $($a.Name)  files=$(@(Get-ChildItem -LiteralPath $a.FullName -File).Count)"
-    }
-    $found['observer_attempts'] = $attempts.Count
-} else {
-    Note 'no observer evidence folder - the run may have failed before the observer started'
-    $found['observer_attempts'] = 0
+# 1. Per-attempt evidence produced by the run itself, for EVERY experiment name.
+# Never hardcode one experiment folder here: the runner writes its
+# RUN-MANIFEST.txt under runs\<experiment>\player-b\<stamp>\, and a stale name
+# produced a ZIP with no attempt manifest at all. matchmaking-native-observer is
+# named only so this comment records the path that used to be hardcoded.
+$runsRoot = Join-Path $Root 'runs'
+$attempts = @()
+if (Test-Path -LiteralPath $runsRoot -PathType Container) {
+    $attempts = @(Get-ChildItem -LiteralPath $runsRoot -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object { Join-Path $_.FullName 'player-b' } |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Container } |
+        ForEach-Object { Get-ChildItem -LiteralPath $_ -Directory -ErrorAction SilentlyContinue } |
+        Sort-Object Name)
 }
+if ($attempts.Count -gt 0) {
+    Note "player-b attempt folders found: $($attempts.Count)"
+    foreach ($a in $attempts) {
+        # Keep the experiment name in the ZIP so two candidates never collide.
+        $experiment = Split-Path -Leaf (Split-Path -Parent (Split-Path -Parent $a.FullName))
+        [void](Copy-Into $a.FullName (Join-Path 'attempts' $experiment))
+        Note "  $experiment\$($a.Name)  files=$(@(Get-ChildItem -LiteralPath $a.FullName -File).Count)"
+    }
+} else {
+    Note 'no runs\<experiment>\player-b folder - the run may have failed before the manifest was written'
+}
+$found['player_b_attempt_folders'] = $attempts.Count
 
 # 2. Desktop logs this package writes.
 $deskLogs = @(Get-ChildItem -LiteralPath $Desktop -File -ErrorAction SilentlyContinue |

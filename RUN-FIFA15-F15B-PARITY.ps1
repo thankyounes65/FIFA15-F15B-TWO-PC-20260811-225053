@@ -20,6 +20,7 @@ $Network = Join-Path $Root 'guest-network-observer.ps1'
 $Forwarder = Join-Path $Root 'loopback-relay-forwarder.ps1'
 $Tailscale = Join-Path $Root 'tailscale-bootstrap.ps1'
 $Diagnostic = Join-Path $Root 'diagnostic-run.ps1'
+$Collect = Join-Path $Root 'COLLECT-PLAYER-B-EVIDENCE.ps1'
 $ExpectedBranch = 'integration/test-matchmaking-working-server-pid-promotion-v2'
 $Candidate = 'FIFA15-MM-WORKING-SERVER-PID-PROMOTION-V2'
 $Package = 'F15B-MM-WORKING-SERVER-PID-PROMOTION-V2'
@@ -73,6 +74,10 @@ if ($SelfTest) {
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$GameVerify,'-SelfTest')
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Attest,'-SelfTest')
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Network,'-SelfTest')
+    # The collector is the only thing that returns this run to Player A. A
+    # regression there is invisible until the ZIP arrives without the attempt
+    # manifest, so prove it here rather than after the run.
+    Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Collect,'-SelfTest')
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
     $banned = @(
         ('fri' + 'da=='),

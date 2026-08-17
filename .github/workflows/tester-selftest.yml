@@ -1,10 +1,16 @@
 name: FIFA15 remote tester self-test
 
+# Candidate-agnostic on purpose. The previous version hardcoded one candidate id,
+# package token, host branch and build, so every new experiment either broke this
+# workflow or quietly left it asserting a retired package. Identity is now read
+# from APPLIANCE-CONFIG.json, and every other file that states it must agree.
+
 on:
   push:
     branches:
       - main
-      - diagnostic/matchmaking-scenario-suite-20260816
+      - 'integration/**'
+      - 'diagnostic/**'
   workflow_dispatch:
 
 jobs:
@@ -14,7 +20,7 @@ jobs:
       - name: Check out tester package
         uses: actions/checkout@v4
 
-      - name: Run non-invasive v15 package self-tests
+      - name: Package identity agrees in every file that states it
         shell: powershell
         run: |
           Set-StrictMode -Version Latest
@@ -23,22 +29,71 @@ jobs:
 
           foreach ($required in @(
             '.\README-FIRST.txt',
+            '.\RUNTIME-TEST.md',
             '.\PLAYER-B-BOOT-AND-CONNECT.md',
             '.\PLAYER-B-KNOWN-GOOD.json',
+            '.\APPLIANCE-CONFIG.json',
+            '.\PACKAGE-MANIFEST.json',
+            '.\RUN-FIFA15-F15B.bat',
             '.\VERIFY-PLAYER-B-GAME-FILES.ps1',
             '.\VERIFY-PLAYER-B-GAME-FILES.bat',
-            '.\collect-evidence.ps1',
-            '.\collect-evidence-v15.ps1',
+            '.\COLLECT-PLAYER-B-EVIDENCE.ps1',
             '.\guest-network-observer.ps1',
-            '.\diagnostic-run.ps1',
-            '.\matchmaking-v15-gsu-npsi-attest.ps1',
-            '.\MATCHMAKING-SCENARIO-SUITE.json',
-            '.\RUN-FIFA15-F15B-SCENARIO.ps1',
-            '.\matchmaking-scenario-suite-attest.ps1',
-            '.\PLAYER-B-SCENARIO-EVIDENCE.md',
-            '.\RUN-FIFA15-F15B.bat'
+            '.\loopback-relay-forwarder.ps1',
+            '.\diagnostic-run.ps1'
           )) {
-            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "missing Player B v15 file: $required" }
+            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "missing Player B file: $required" }
+          }
+
+          $config = Get-Content -LiteralPath '.\APPLIANCE-CONFIG.json' -Raw | ConvertFrom-Json
+          $candidate = [string]$config.candidate_id
+          $package = [string]$config.package_attestation
+          $branch = [string]$config.expected_host_branch
+          $build = [string]$config.expected_host_build
+          foreach ($field in @('candidate_id', 'package_attestation', 'expected_host_branch', 'expected_host_build')) {
+            if (-not [string]$config.$field) { throw "APPLIANCE-CONFIG.json has no $field" }
+          }
+          if ([int]$config.attestation_gate_port -ne 48216) { throw 'Config lost candidate gate port 48216' }
+          Write-Host "candidate=$candidate package=$package branch=$branch build=$build"
+
+          $overlay = (Get-Content -LiteralPath '.\PACKAGE-MANIFEST.json' -Raw | ConvertFrom-Json).matchmaking_overlay
+          if ([string]$overlay.candidate_id -ne $candidate) { throw 'PACKAGE-MANIFEST candidate mismatch' }
+          if ([string]$overlay.package_attestation -ne $package) { throw 'PACKAGE-MANIFEST package mismatch' }
+          if ([string]$overlay.expected_host_branch -ne $branch) { throw 'PACKAGE-MANIFEST host branch mismatch' }
+          if ([string]$overlay.expected_host_build -ne $build) { throw 'PACKAGE-MANIFEST host build mismatch' }
+          if ([int]$overlay.gate_port -ne 48216) { throw 'PACKAGE-MANIFEST lost candidate gate port 48216' }
+          if (-not [bool]$overlay.exact_attempt_evidence_binding) { throw 'Manifest must require exact-attempt evidence binding' }
+          if ([bool]$overlay.requires_git_checkout) { throw 'Portable Player B package must not require .git' }
+
+          # Every operator-facing document must name the SAME candidate. This is
+          # the check a stale README-FIRST.txt used to walk straight past.
+          foreach ($doc in @('.\RUNTIME-TEST.md', '.\README-FIRST.txt')) {
+            $text = Get-Content -LiteralPath $doc -Raw
+            foreach ($token in @($candidate, $package, $branch, $build)) {
+              if (-not $text.Contains($token)) { throw "$doc does not state the current $token" }
+            }
+          }
+
+          # The launcher must reach a runner that pins this same identity.
+          $bat = Get-Content -LiteralPath '.\RUN-FIFA15-F15B.bat' -Raw
+          $runnerMatch = [regex]::Match($bat, 'RUN-FIFA15-F15B[-A-Za-z0-9]*\.ps1')
+          if (-not $runnerMatch.Success) { throw 'RUN-FIFA15-F15B.bat does not invoke a Player B runner script' }
+          $runner = ".\$($runnerMatch.Value)"
+          if (-not (Test-Path -LiteralPath $runner -PathType Leaf)) { throw "RUN BAT names a missing runner: $runner" }
+          $runnerText = Get-Content -LiteralPath $runner -Raw
+          foreach ($token in @($candidate, $package, $branch)) {
+            if (-not $runnerText.Contains($token)) { throw "$runner does not pin $token" }
+          }
+          "PLAYER_B_RUNNER=$runner" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          # A package that declares no instrumentation must contain none.
+          if (-not [bool]$overlay.frida_used -and -not [bool]$overlay.stalker_used) {
+            foreach ($file in @(Get-ChildItem -Path '.' -Filter '*.ps1' -File)) {
+              $t = Get-Content -LiteralPath $file.FullName -Raw
+              foreach ($banned in @(('Interceptor' + '.attach'), ('Stalker' + '.follow'))) {
+                if ($t.Contains($banned)) { throw "$($file.Name) reintroduced in-process instrumentation: $banned" }
+              }
+            }
           }
 
           $known = Get-Content -LiteralPath '.\PLAYER-B-KNOWN-GOOD.json' -Raw | ConvertFrom-Json
@@ -47,63 +102,42 @@ jobs:
           $forwardPorts = @($known.network.guest_loopback_forwarders | ForEach-Object { [int](($_.local -split ':')[-1]) } | Sort-Object -Unique)
           if ($forwardPorts.Count -ne 2 -or 17502 -notin $forwardPorts -or 17503 -notin $forwardPorts) { throw 'Known-good contract must pin only the two proven guest loopback forward ports' }
 
-          $candidate = 'FIFA15-MM-V15-GSU-NPSI'
-          $package = 'F15B-GITHUB-KNOWN-GOOD-20260815-V15-GSU-NPSI-1'
-          $branch = 'integration/test-matchmaking-gsu-npsi-v15'
-          $build = 'build_pairing_gsu_npsi_v15.rs'
-          $revision = 'ea-readiness-v1+loopback-forwarder-17502-17503+matchmaking-v15-gsu-npsi-evidence1'
+      - name: Current runner and candidate-independent stack self-tests
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
 
-          $config = Get-Content -LiteralPath '.\APPLIANCE-CONFIG.json' -Raw | ConvertFrom-Json
-          if ([string]$config.candidate_id -ne $candidate) { throw 'Config lost v15 candidate id' }
-          if ([string]$config.package_attestation -ne $package) { throw 'Config lost v15 package attestation' }
-          if ([string]$config.expected_host_branch -ne $branch) { throw 'Config lost expected v15 A branch' }
-          if ([string]$config.expected_host_build -ne $build) { throw 'Config lost expected v15 A build' }
-          if ([int]$config.attestation_gate_port -ne 48216) { throw 'Config lost candidate gate port 48216' }
-
-          $manifest = Get-Content -LiteralPath '.\PACKAGE-MANIFEST.json' -Raw | ConvertFrom-Json
-          if ([string]$manifest.package_revision -ne $revision) { throw 'Manifest lost v15 package revision' }
-          if ([string]$manifest.matchmaking_overlay.candidate_id -ne $candidate) { throw 'Manifest candidate mismatch' }
-          if ([string]$manifest.matchmaking_overlay.package_attestation -ne $package) { throw 'Manifest package mismatch' }
-          if ([string]$manifest.matchmaking_overlay.expected_host_branch -ne $branch) { throw 'Manifest branch mismatch' }
-          if ([string]$manifest.matchmaking_overlay.expected_host_build -ne $build) { throw 'Manifest build mismatch' }
-          if (-not [bool]$manifest.matchmaking_overlay.exact_attempt_evidence_binding) { throw 'Manifest must require exact-attempt evidence binding' }
-          if ([bool]$manifest.matchmaking_overlay.requires_git_checkout) { throw 'Portable Player B package must not require .git' }
-
-          $bat = Get-Content -LiteralPath '.\RUN-FIFA15-F15B.bat' -Raw
-          foreach ($marker in @(
-            $candidate,
-            $package,
-            $branch,
-            $build,
-            'matchmaking-v15-gsu-npsi-attest.ps1',
-            'guest-network-observer.ps1" -Start',
-            'guest-network-observer.ps1" -Stop -AppendToNewestDiag',
-            'diagnostic-run.ps1',
-            'collect-evidence-v15.ps1" -DiagPath',
-            'goto :finalize',
-            'FIFA 15 F15B v15 exact-attempt diagnostic',
-            'FIFA15-F15B-EVIDENCE-'
+          # Candidate-independent parts of the proven boot/connect stack. Retired
+          # per-candidate attest scripts are deliberately NOT run here: they pin
+          # experiments this package no longer is.
+          foreach ($script in @(
+            '.\tailscale-bootstrap.ps1',
+            '.\tailscale-preflight.ps1',
+            '.\loopback-relay-forwarder.ps1',
+            '.\diagnostic-run.ps1',
+            '.\launch-safe.ps1',
+            '.\safe-run.ps1',
+            '.\collect-evidence.ps1',
+            '.\COLLECT-PLAYER-B-EVIDENCE.ps1'
           )) {
-            if (-not $bat.Contains($marker)) { throw "RUN BAT missing v15 marker: $marker" }
-          }
-          if ($bat.Contains('FIFA15-MM-V14-0X0B')) { throw 'RUN BAT retained stale v14 candidate' }
-          if ($bat.Contains('matchmaking-v14-0x0b-attest.ps1')) { throw 'RUN BAT retained stale v14 attestation' }
-
-          $binder = Get-Content -LiteralPath '.\collect-evidence-v15.ps1' -Raw
-          foreach ($marker in @('collection_bound_diag','LastWriteTimeUtc','collect-evidence.ps1','-DesktopPath')) {
-            if (-not $binder.Contains($marker)) { throw "v15 evidence binder missing marker: $marker" }
+            if (-not (Test-Path -LiteralPath $script -PathType Leaf)) { throw "missing stack script: $script" }
+            Write-Host "--- $script -SelfTest"
+            & $script -SelfTest
+            if ($LASTEXITCODE -ne 0) { throw "$script -SelfTest failed with $LASTEXITCODE" }
           }
 
-          .\VERIFY-PLAYER-B-GAME-FILES.ps1 -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\tailscale-bootstrap.ps1 -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\tailscale-preflight.ps1 -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\matchmaking-v15-gsu-npsi-attest.ps1 -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\loopback-relay-forwarder.ps1 -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The current runner chains the current attestation, the game-file
+          # contract, the network observer and the evidence collector.
+          Write-Host "--- $env:PLAYER_B_RUNNER -SelfTest"
+          & $env:PLAYER_B_RUNNER -SelfTest
+          if ($LASTEXITCODE -ne 0) { throw "current Player B runner self-test failed with $LASTEXITCODE" }
+
+      - name: Loopback forwarder owns both proven ports
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
           try {
             .\loopback-relay-forwarder.ps1 -Start
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -112,23 +146,4 @@ jobs:
             if ($ports.Count -ne 2 -or 17502 -notin $ports -or 17503 -notin $ports) { throw 'Forwarder did not own both required loopback ports.' }
           } finally {
             .\loopback-relay-forwarder.ps1 -Stop
-          }
-          .\guest-network-observer.ps1 -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\diagnostic-run.ps1 -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\collect-evidence.ps1 -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\collect-evidence-v15.ps1 -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\launch-safe.ps1 -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\safe-run.ps1 -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\matchmaking-scenario-suite-attest.ps1 -All
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          foreach ($scenario in 1..4) {
-            $env:SCENARIO_ID = [string]$scenario
-            .\matchmaking-scenario-suite-attest.ps1 -Scenario $scenario -SelfTest
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
