@@ -32,13 +32,26 @@ notifications between `NotifyGameSetup` and the client's first
 `updateMeshConnection`, back-to-back with no client traffic in between:
 
 ```
-S 0x0014  GameSetup, MSID = this client's own session      (1136 B)
-S 0x00E7  {GID}                                               (8 B)
-S 0x0016  GameSetup, ONE byte different: MSID = the PEER's (1136 B)
-S 0x0064  {GID, GSTA: 1}                                     (13 B)
-S 0x00C9  {DONE:1, GLID:1, REMV:[], UPDT:[]}                 (22 B)
+HOST seat:
+S 0x0014  GameSetup, MSID = own session
+S 0x00E7  {GID}                                 <- host only
+S 0x0016  GameSetup, ONE byte different: MSID = the JOINER's
+S 0x0064  {GID, GSTA: 1}
+S 0x00C9  {DONE:1, GLID:1, REMV:[], UPDT:[]}
+C 0x001D  updateMeshConnection
+
+JOINER seat (this is Player B's role):
+S 0x0014  GameSetup, MSID = own session
+S 0x0016  GameSetup, BYTE-IDENTICAL to the above
+S 0x0064  {GID, GSTA: 1}
+S 0x00C9  {DONE:1, GLID:1, REMV:[], UPDT:[]}
 C 0x001D  updateMeshConnection
 ```
+
+A joiner-seat capture (`packet capture/joiner log/`) refuted the earlier
+"0x0016 carries the peer's session, to both roles" reading: in a joiner seat the
+two documents are byte-identical, and `0x00E7` is not sent at all. Player B is
+the joiner in this test, so **this is the seat those corrections affect**.
 
 Player A v3 emits all four to **both** clients in the captured order, and also
 corrects two things in the same window: `GSTA=130` is echoed **ungated** (retail

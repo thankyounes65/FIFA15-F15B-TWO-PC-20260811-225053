@@ -31,7 +31,7 @@
     "player_a_wire_scope": "post_gamesetup_burst_00e7_0016_peer_msid_0064_gsta1_00c9+ungated_gsta130_echo+paired_promotion+fut_lobby_own_squad_and_opponent_route",
     "leads_1_3_inherited_unchanged": true,
     "lead4_enabled": true,
-    "lead4_scope": "4a_0016_peer_msid+4b_00e7+4b_0064_gsta1+4b_00c9",
+    "lead4_scope": "4a_0016_joining_msid+4b_00e7_host_only+4b_0064_gsta1+4b_00c9",
     "lead4_00c9_reproduced": true,
     "lead4_00c9_basis": "decoded completely from the lossless capture; both lists are empty inside the burst so nothing is invented",
     "gsta130_echo_gated_on_peer_edge": false,

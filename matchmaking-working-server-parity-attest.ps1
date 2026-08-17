@@ -54,7 +54,7 @@ function Assert-LocalState {
     # evidence-backed rather than invention. What must stay true is that the
     # two lifecycle corrections are declared and Player B changes no wire.
     if (-not [bool]$overlay.lead4_00c9_reproduced) { throw 'PACKAGE-MANIFEST no longer reproduces the decoded 0x00C9.' }
-    if ([string]$overlay.lead4_scope -ne '4a_0016_peer_msid+4b_00e7+4b_0064_gsta1+4b_00c9') { throw "PACKAGE-MANIFEST Lead 4 scope mismatch: $($overlay.lead4_scope)" }
+    if ([string]$overlay.lead4_scope -ne '4a_0016_joining_msid+4b_00e7_host_only+4b_0064_gsta1+4b_00c9') { throw "PACKAGE-MANIFEST Lead 4 scope mismatch: $($overlay.lead4_scope)" }
     if ([bool]$overlay.gsta130_echo_gated_on_peer_edge) { throw 'PACKAGE-MANIFEST still gates the GSTA=130 echo; the capture shows it ungated.' }
     if ([string]$overlay.promotion_bundle_order -ne 'paired_per_player') { throw "PACKAGE-MANIFEST promotion order mismatch: $($overlay.promotion_bundle_order)" }
     # The capture is explicit that POST /match echoes the requester's own
