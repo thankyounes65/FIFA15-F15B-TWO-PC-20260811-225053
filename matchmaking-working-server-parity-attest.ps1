@@ -57,6 +57,10 @@ function Assert-LocalState {
     if ([string]$overlay.lead4_scope -ne '4a_0016_peer_msid+4b_00e7+4b_0064_gsta1+4b_00c9') { throw "PACKAGE-MANIFEST Lead 4 scope mismatch: $($overlay.lead4_scope)" }
     if ([bool]$overlay.gsta130_echo_gated_on_peer_edge) { throw 'PACKAGE-MANIFEST still gates the GSTA=130 echo; the capture shows it ungated.' }
     if ([string]$overlay.promotion_bundle_order -ne 'paired_per_player') { throw "PACKAGE-MANIFEST promotion order mismatch: $($overlay.promotion_bundle_order)" }
+    # The capture is explicit that POST /match echoes the requester's own
+    # squad; declaring anything else would be false provenance.
+    if ([string]$overlay.fut_post_match_returns -ne 'requester_own_squad') { throw "PACKAGE-MANIFEST fut POST /match contract mismatch: $($overlay.fut_post_match_returns)" }
+    if ([string]$overlay.fut_opponent_route -notmatch 'squad/active/user') { throw 'PACKAGE-MANIFEST does not declare the captured opponent route.' }
     if ([string]$overlay.player_b_wire_capture -notmatch '42128') { throw 'PACKAGE-MANIFEST does not declare the Player B Blaze wire capture.' }
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
@@ -79,7 +83,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B setup-burst v3 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 4 scope=$($PackageManifest.matchmaking_overlay.lead4_scope), ungated GSTA=130 echo, paired promotion, and a filtered Player B wire capture on 42128." -ForegroundColor Green
+    Write-Host "PASS: portable Player B setup-burst v3 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 4 scope=$($PackageManifest.matchmaking_overlay.lead4_scope), ungated GSTA=130 echo, paired promotion, the corrected FUT lobby (own squad from POST /match, opponent from squad/active/user), and a filtered Player B wire capture on 42128." -ForegroundColor Green
     exit 0
 }
 

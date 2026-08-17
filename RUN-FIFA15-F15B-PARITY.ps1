@@ -126,6 +126,8 @@ New-Item -ItemType Directory -Force -Path $attempt | Out-Null
     'lead4_00c9_basis=decoded_from_lossless_capture_empty_lists',
     'gsta130_echo_gated_on_peer_edge=false',
     'promotion_bundle_order=paired_per_player',
+    'fut_post_match_returns=requester_own_squad',
+    'fut_opponent_route=squad/active/user/<peer persona>',
     'scenario_selection=false',
     'progress_measured_from=player_a_relay_log_and_trace',
     'player_b_wire_capture=filtered_pktmon_full_packets',

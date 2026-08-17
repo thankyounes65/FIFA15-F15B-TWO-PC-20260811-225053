@@ -45,6 +45,18 @@ corrects two things in the same window: `GSTA=130` is echoed **ungated** (retail
 echoes it 260 ms before the peer edge exists), and the promotion bundle is
 **paired per player** rather than batched.
 
+### The FUT lobby, from the same capture
+
+That server's FUT REST is plaintext, and it settles the lobby layer too:
+
+- **`POST /ut/game/fifa15/match` returns the REQUESTER's own squad** — it is
+  answered 121 ms *before* `startMatchmaking`, when no opponent exists. Player A
+  previously substituted the peer's squad; that is removed.
+- **The opponent comes from `GET /ut/game/fifa15/squad/active/user/<peer persona>`**,
+  a route Player A had never implemented and now serves.
+
+Player B's wire is still unchanged by all of this.
+
 ## Exact actions
 
 1. Player A uses the Universal Branch Tester and selects `integration/test-matchmaking-working-server-setup-burst-v3`.

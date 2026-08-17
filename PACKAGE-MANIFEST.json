@@ -28,7 +28,7 @@
     "self_heals_stale_helper_state": true,
     "frida_used": false,
     "player_a_changes_matchmaking_wire_protocol": true,
-    "player_a_wire_scope": "post_gamesetup_burst_00e7_0016_peer_msid_0064_gsta1_00c9+ungated_gsta130_echo+paired_promotion",
+    "player_a_wire_scope": "post_gamesetup_burst_00e7_0016_peer_msid_0064_gsta1_00c9+ungated_gsta130_echo+paired_promotion+fut_lobby_own_squad_and_opponent_route",
     "leads_1_3_inherited_unchanged": true,
     "lead4_enabled": true,
     "lead4_scope": "4a_0016_peer_msid+4b_00e7+4b_0064_gsta1+4b_00c9",
@@ -36,6 +36,8 @@
     "lead4_00c9_basis": "decoded completely from the lossless capture; both lists are empty inside the burst so nothing is invented",
     "gsta130_echo_gated_on_peer_edge": false,
     "promotion_bundle_order": "paired_per_player",
+    "fut_post_match_returns": "requester_own_squad",
+    "fut_opponent_route": "GET /ut/game/fifa15/squad/active/user/<peer persona>",
     "player_b_wire_capture": "filtered_pktmon_full_packets_tcp_42128",
     "progress_measured_from": "player_a_relay_log_and_trace",
     "reference_capture": "aurora15.onlyonemzy.com plaintext Blaze session"
