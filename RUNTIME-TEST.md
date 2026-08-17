@@ -55,6 +55,16 @@ That server's FUT REST is plaintext, and it settles the lobby layer too:
 - **The opponent comes from `GET /ut/game/fifa15/squad/active/user/<peer persona>`**,
   a route Player A had never implemented and now serves.
 
+### Two further corrections, from re-checking an older audit against this capture
+
+- **`GameSessionUpdated` (`0x0073`) to the guest is corrected**, not removed:
+  the guest never calls `FinalizeGameCreation` itself, so this is its only
+  confirmed GSU path. It now carries `GID`+empty `XNNC`/`XSES` (matching the
+  capture exactly) instead of an unconfirmed shape, and a second, additional
+  trigger that could fire an extra copy is retired.
+- **`0x000B` is retired.** Zero occurrences across both captures, including
+  ~22 minutes of full retail play; no downstream consumer requires it.
+
 Player B's wire is still unchanged by all of this.
 
 ## Exact actions

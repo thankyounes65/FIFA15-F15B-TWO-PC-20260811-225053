@@ -61,6 +61,9 @@ function Assert-LocalState {
     # squad; declaring anything else would be false provenance.
     if ([string]$overlay.fut_post_match_returns -ne 'requester_own_squad') { throw "PACKAGE-MANIFEST fut POST /match contract mismatch: $($overlay.fut_post_match_returns)" }
     if ([string]$overlay.fut_opponent_route -notmatch 'squad/active/user') { throw 'PACKAGE-MANIFEST does not declare the captured opponent route.' }
+    if ([string]$overlay.gsu_shape -ne 'gid_plus_empty_xnnc_xses_single_send') { throw "PACKAGE-MANIFEST GSU shape mismatch: $($overlay.gsu_shape)" }
+    if (-not [bool]$overlay.gsu_second_trigger_retired) { throw 'PACKAGE-MANIFEST does not record the retired second GSU trigger.' }
+    if (-not [bool]$overlay.'0x000b_send_retired') { throw 'PACKAGE-MANIFEST does not record the retired 0x000B send.' }
     if ([string]$overlay.player_b_wire_capture -notmatch '42128') { throw 'PACKAGE-MANIFEST does not declare the Player B Blaze wire capture.' }
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
@@ -83,7 +86,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B setup-burst v3 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 4 scope=$($PackageManifest.matchmaking_overlay.lead4_scope), ungated GSTA=130 echo, paired promotion, the corrected FUT lobby (own squad from POST /match, opponent from squad/active/user), and a filtered Player B wire capture on 42128." -ForegroundColor Green
+    Write-Host "PASS: portable Player B setup-burst v3 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 4 scope=$($PackageManifest.matchmaking_overlay.lead4_scope), ungated GSTA=130 echo, paired promotion, the corrected FUT lobby (own squad from POST /match, opponent from squad/active/user), the corrected/retired GSU paths, the retired 0x000B send, and a filtered Player B wire capture on 42128." -ForegroundColor Green
     exit 0
 }
 
