@@ -1,10 +1,11 @@
 <#
-Player B runner for the working-server PID promotion v2 test.
+Player B runner for the working-server setup burst v3 test.
 
 No Frida or other in-process instrumentation is attached to fifa15.exe. Player B
 keeps the already-proven boot/connect stack unchanged. This branch changes only
-candidate/package provenance so Player A can test Leads 1-3 as the sole runtime
-protocol variable.
+candidate/package provenance so Player A's post-GameSetup notification burst is
+the sole runtime protocol variable. Leads 1-3 were Confirmed by run
+20260817-064947 and are inherited unchanged on the Player A side.
 #>
 [CmdletBinding()]
 param([switch]$SelfTest)
@@ -21,12 +22,12 @@ $Forwarder = Join-Path $Root 'loopback-relay-forwarder.ps1'
 $Tailscale = Join-Path $Root 'tailscale-bootstrap.ps1'
 $Diagnostic = Join-Path $Root 'diagnostic-run.ps1'
 $Collect = Join-Path $Root 'COLLECT-PLAYER-B-EVIDENCE.ps1'
-$ExpectedBranch = 'integration/test-matchmaking-working-server-pid-promotion-v2'
-$Candidate = 'FIFA15-MM-WORKING-SERVER-PID-PROMOTION-V2'
-$Package = 'F15B-MM-WORKING-SERVER-PID-PROMOTION-V2'
+$ExpectedBranch = 'integration/test-matchmaking-working-server-setup-burst-v3'
+$Candidate = 'FIFA15-MM-WORKING-SERVER-SETUP-BURST-V3'
+$Package = 'F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
-$attempt = Join-Path $Root ("runs\matchmaking-working-server-pid-promotion-v2\player-b\$stamp")
+$attempt = Join-Path $Root ("runs\matchmaking-working-server-setup-burst-v3\player-b\$stamp")
 $manifest = Join-Path $attempt 'RUN-MANIFEST.txt'
 
 $networkActive = $false
@@ -89,19 +90,19 @@ if ($SelfTest) {
     )
     foreach ($token in $banned) {
         if ($source.Contains($token)) {
-            throw "Player B v2 runner reintroduced in-process instrumentation: $token"
+            throw "Player B v3 runner reintroduced in-process instrumentation: $token"
         }
     }
     if ($source -match "Start-Process\s+-FilePath\s+'python'") {
-        throw 'Player B v2 runner reintroduced a Python observer process.'
+        throw 'Player B v3 runner reintroduced a Python observer process.'
     }
-    Write-Host "PASS: Player B v2 runner pins $ExpectedBranch / $Candidate / $Package, attaches nothing to fifa15.exe, and retains the known-good boot/connect stack." -ForegroundColor Green
+    Write-Host "PASS: Player B v3 runner pins $ExpectedBranch / $Candidate / $Package, attaches nothing to fifa15.exe, and retains the known-good boot/connect stack." -ForegroundColor Green
     exit 0
 }
 
 New-Item -ItemType Directory -Force -Path $attempt | Out-Null
 @(
-    'FIFA15 working-server PID promotion v2 - Player B',
+    'FIFA15 working-server setup burst v3 - Player B',
     "started_utc=$((Get-Date).ToUniversalTime().ToString('o'))",
     "branch=$ExpectedBranch",
     "candidate_id=$Candidate",
@@ -111,11 +112,14 @@ New-Item -ItemType Directory -Force -Path $attempt | Out-Null
     'native_instrumentation=none',
     'frida_used=false',
     'wire_change=true_on_player_a_only',
-    'player_a_wire_scope=lead1_pid_identity+lead2_mesh_resolution+lead3_retail_promotion_gate',
-    'lead4_enabled=false',
+    'player_a_wire_scope=post_gamesetup_burst_00e7_then_0016_peer_msid_then_0064_gsta1',
+    'leads_1_3_inherited_unchanged=true',
+    'lead4_enabled=true',
+    'lead4_scope=4a_0016_peer_msid+4b_00e7+4b_0064_gsta1',
+    'lead4_00c9_reproduced=false',
     'scenario_selection=false',
     'progress_measured_from=player_a_relay_log_and_trace',
-    'reference=docs/MATCHMAKING-20260817-PARITY-OFFLINE-LEADS.md'
+    'reference=docs/MATCHMAKING-WORKING-SERVER-SETUP-BURST-V3.md'
 ) | Set-Content -LiteralPath $manifest -Encoding UTF8
 
 try {
@@ -186,7 +190,7 @@ try {
 
 Write-Host ''
 Write-Host '====================================================================' -ForegroundColor Cyan
-Write-Host '  PLAYER B PID-PROMOTION V2 RUN FINISHED' -ForegroundColor Cyan
+Write-Host '  PLAYER B SETUP-BURST V3 RUN FINISHED' -ForegroundColor Cyan
 Write-Host '====================================================================' -ForegroundColor Cyan
 Write-Host "Manifest: $attempt" -ForegroundColor Green
 Write-Host 'Nothing was attached to fifa15.exe. Progress is scored from Player A relay/trace evidence.' -ForegroundColor Gray

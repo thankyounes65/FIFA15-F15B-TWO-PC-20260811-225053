@@ -9,10 +9,10 @@ $Config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $PackageManifest=Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-WORKING-SERVER-PID-PROMOTION-V2'
-$Package='F15B-MM-WORKING-SERVER-PID-PROMOTION-V2'
-$ExpectedBranch='integration/test-matchmaking-working-server-pid-promotion-v2'
-$ExpectedHostBuild='build_pairing_working_server_pid_promotion_v2.rs'
+$Candidate='FIFA15-MM-WORKING-SERVER-SETUP-BURST-V3'
+$Package='F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
+$ExpectedBranch='integration/test-matchmaking-working-server-setup-burst-v3'
+$ExpectedHostBuild='build_pairing_working_server_setup_burst_v3.rs'
 $ExpectedBaseline='8ac9f914685ddf8dc60ca95a21addb674de6716b'
 
 function Assert-LocalState {
@@ -46,12 +46,17 @@ function Assert-LocalState {
     if ([string]$overlay.expected_host_branch -ne $ExpectedBranch) { throw "PACKAGE-MANIFEST host branch mismatch: $($overlay.expected_host_branch)" }
     if ([string]$overlay.expected_host_build -ne $ExpectedHostBuild) { throw "PACKAGE-MANIFEST host build mismatch: $($overlay.expected_host_build)" }
     if ([string]$overlay.wire_protocol_baseline_commit -ne $ExpectedBaseline) { throw "PACKAGE-MANIFEST baseline mismatch: $($overlay.wire_protocol_baseline_commit)" }
-    if ([bool]$overlay.lead4_enabled) { throw 'PACKAGE-MANIFEST unexpectedly enables Lead 4.' }
+    # v3 IS the Lead 4 post-GameSetup burst, so recording it as disabled would be
+    # false provenance. What must stay off is 0x00C9, whose document has never
+    # been decoded - only its field names were ever observed.
+    if (-not [bool]$overlay.lead4_enabled) { throw 'PACKAGE-MANIFEST does not record the Lead 4 burst this candidate tests.' }
+    if ([bool]$overlay.lead4_00c9_reproduced) { throw 'PACKAGE-MANIFEST claims 0x00C9 is reproduced; its document has never been decoded.' }
+    if ([string]$overlay.lead4_scope -ne '4a_0016_peer_msid+4b_00e7+4b_0064_gsta1') { throw "PACKAGE-MANIFEST Lead 4 scope mismatch: $($overlay.lead4_scope)" }
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
-    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server PID Promotion v2')) {
-        throw 'RUNTIME-TEST.md is not the Player B PID-promotion v2 package contract.'
+    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server Setup Burst v3')) {
+        throw 'RUNTIME-TEST.md is not the Player B setup-burst v3 package contract.'
     }
     if (-not $runtimeText.Contains($ExpectedBranch)) {
         throw "RUNTIME-TEST.md does not pin expected branch $ExpectedBranch."
@@ -68,7 +73,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B PID-promotion v2 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, and Lead 4 disabled." -ForegroundColor Green
+    Write-Host "PASS: portable Player B setup-burst v3 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 4 scope=$($PackageManifest.matchmaking_overlay.lead4_scope), and 0x00C9 not reproduced." -ForegroundColor Green
     exit 0
 }
 
@@ -88,8 +93,8 @@ try {
     $count=$stream.Read($buffer,0,$buffer.Length)
     $ack=[Text.Encoding]::ASCII.GetString($buffer,0,$count).Trim()
     $expected="ACCEPT $Candidate $Package"
-    if ($ack -ne $expected) { throw "Player A rejected PID-promotion v2 package; got '$ack'" }
-    Write-Host 'PASS: Player A accepted the exact Player B PID-promotion v2 package.' -ForegroundColor Green
+    if ($ack -ne $expected) { throw "Player A rejected setup-burst v3 package; got '$ack'" }
+    Write-Host 'PASS: Player A accepted the exact Player B setup-burst v3 package.' -ForegroundColor Green
 } finally {
     if ($async -and $async.AsyncWaitHandle) { $async.AsyncWaitHandle.Close() }
     $client.Close()

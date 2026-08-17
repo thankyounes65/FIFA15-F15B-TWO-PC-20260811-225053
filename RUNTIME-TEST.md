@@ -1,58 +1,91 @@
-# FIFA15 Player B Working-Server PID Promotion v2
+# FIFA15 Player B Working-Server Setup Burst v3
 
-**Subsystem:** FUT Online Single Match matchmaking — post-GameSetup mesh identity and promotion lifecycle.
+**Subsystem:** FUT Online Single Match matchmaking — the notification burst the real server pushes between `NotifyGameSetup` and the client's first mesh request.
 
-**Player B branch:** `integration/test-matchmaking-working-server-pid-promotion-v2`
+**Player B branch:** `integration/test-matchmaking-working-server-setup-burst-v3`
 
-**Player A required branch:** `thankyounes65/fifa15-relay-clean` / `integration/test-matchmaking-working-server-pid-promotion-v2`
+**Player A required branch:** `thankyounes65/fifa15-relay-clean` / `integration/test-matchmaking-working-server-setup-burst-v3`
 
-**Player A build:** `build_pairing_working_server_pid_promotion_v2.rs`
+**Player A build:** `build_pairing_working_server_setup_burst_v3.rs`
 
-**Candidate/package:** `FIFA15-MM-WORKING-SERVER-PID-PROMOTION-V2` / `F15B-MM-WORKING-SERVER-PID-PROMOTION-V2`.
+**Candidate/package:** `FIFA15-MM-WORKING-SERVER-SETUP-BURST-V3` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`, peer gate TCP 48216.
 
-**No instrumentation.** Nothing is attached to `fifa15.exe` on either machine. Player B remains a normal second client using the already-proven Tailscale/hosts/loopback/LSX/certificate/evidence stack. Retail `fifa15.exe` SHA-256 remains `3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB` and no game file is modified.
+**No instrumentation.** Nothing is attached to `fifa15.exe` on either machine. Player B remains a normal second client using the already-proven Tailscale/hosts/loopback/LSX/certificate/evidence stack. Retail `fifa15.exe` SHA-256 remains `3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB` and no game file is modified. **Player B's wire is unchanged in this candidate** — the only variable is Player A's burst.
+
+## Already Confirmed, and not under test
+
+Run `20260817-064947` proved Leads 1–3 end to end, and Player A inherits them
+unchanged here:
+
+- every mesh `TCG` resolved to the real peer (0 unknown, previously all unknown);
+- self announcements never promote; the genuine cross-player CONNECTED edge does;
+- `GSTA=130` is held until that edge arrives;
+- both players then receive `GSTA130 → STAT=4 ×2 → JoinCompleted ×2`, once each, with no premature host `JoinCompleted`;
+- neither client sends `leaveGameByGroup` any more.
+
+The shared lobby still did not appear, which is why this run exists.
 
 ## Exact hypothesis
 
-The preserved parity attempt `20260817-033118` advanced through GameSetup, four mesh requests, host Finalize, client `GSTA=130`, sustained telemetry and bidirectional UDP, but every mesh request resolved `target_user_id=unknown` because authenticated self `CGID/SCG` still used fabricated `1515100001/2` while parity GameSetup correctly published target `CONG/UGID/TCG` using full-width player PID.
+The plaintext capture of a real successful FIFA 15 session shows four
+notifications between `NotifyGameSetup` and the client's first
+`updateMeshConnection`, back-to-back with no client traffic in between:
 
-The same run also sent an inherited `NotifyPlayerJoinCompleted (donor host setup complete)` before Finalize, while the real working FIFA 15 capture starts both players at `STAT=2` and sends both players' `STAT=4` plus both `JoinCompleted` notifications only after the client requests `GSTA=130`.
+```
+S 0x0014  GameSetup, REAS.VALU.MSID = this client's own session
+S 0x00E7  GID only
+S 0x0016  GameSetup, byte-identical except REAS.VALU.MSID = the PEER's session
+S 0x0064  GID + GSTA = 1
+S 0x00C9  DONE/GLID/REMV/UPDT
+C 0x001D  updateMeshConnection
+```
 
-Player A v2 therefore changes one causal lifecycle chain:
+Run `20260817-064947` sent none of `0x00E7` or `0x0064(GSTA=1)`, sent no
+`0x0016` to the host at all, and gave the guest a `0x0016` carrying its own
+session id rather than the peer's. Player A v3 emits the first three to **both**
+clients in the captured order and position.
 
-1. full-width PID is the connection-group id on authenticated CGID/SCG and GameSetup CONG/UGID/TCG;
-2. PID TCG resolves to the real paired user so UpdateMeshConnection enters mesh state;
-3. neither host nor joiner is completed during setup;
-4. promotion requires both a genuine cross-player CONNECTED edge and client-owned `GSTA=130`;
-5. the release bundle is one-shot and ordered `GSTA130 -> STAT4(A/B) -> JoinCompleted(A/B)`.
-
-The documented remaining working-server notification differences (“Lead 4”) are deliberately **not** enabled in this run.
+`0x00C9` is deliberately **not** reproduced: only its field names were ever
+observed, with no types, values, order or counts, so building it would mean
+inventing a wire document.
 
 ## Exact actions
 
-1. Player A uses the Universal Branch Tester and selects `integration/test-matchmaking-working-server-pid-promotion-v2`.
+1. Player A uses the Universal Branch Tester and selects `integration/test-matchmaking-working-server-setup-burst-v3`.
 2. Player A must require `launch\VERIFY-BUILD.bat` to PASS before FIFA starts.
-3. Player B uses this exact branch/package and runs `RUN-FIFA15-F15B.bat` as Administrator.
-4. Require the peer gate to accept exact candidate/package `FIFA15-MM-WORKING-SERVER-PID-PROMOTION-V2` / `F15B-MM-WORKING-SERVER-PID-PROMOTION-V2`.
-5. Both enter FUT -> Online Single Match. **A searches first, B searches second.**
+3. Player B uses a FRESH ZIP of this exact branch and runs `RUN-FIFA15-F15B.bat` as Administrator.
+4. Require the peer gate to accept exact candidate/package `FIFA15-MM-WORKING-SERVER-SETUP-BURST-V3` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`.
+5. Both enter FUT → Online Single Match. **A searches first, B searches second.**
 6. Do not cancel or retry after pairing.
 7. If both reach the shared lobby, B readies first, then A. Continue toward kickoff only while stable.
 8. If the joiner remains loading, leave the state visible briefly so evidence flushes, then close FIFA normally.
 
 ## Primary discriminator
 
-The run should produce this exact chain in Player A evidence:
+Player A evidence must show `matchmaking_working_server_setup_burst_emitted`
+twice, once per client, with `peer_matchmaking_session_id` different from
+`own_matchmaking_session_id`, and the relay log must show per client:
 
-`TCG=<peer PID> -> target_user_id=<peer PID> -> matchmaking_mesh_link_recorded -> client GSTA130 -> matchmaking_working_server_pre_game_released -> matchmaking_working_server_promotion_bundle`
+```
+NotifyGameSetup (real pair …)
+Notify0x00E7 (working server setup burst, GID only)
+NotifyJoiningPlayerInitiateConnections (working server setup burst, peer MSID)
+NotifyGameStateChange (working server setup burst, GSTA=1)
+```
 
-and the relay should show two promotion-time `NotifyGamePlayerStateChange`/STAT4 notifications plus two `NotifyPlayerJoinCompleted` notifications, with **no** `donor host setup complete` notification.
+with the inherited Leads 1–3 chain still completing unchanged afterwards.
 
-## PASS / PARTIAL / FAIL
+## PASS / PARTIAL / CLEAN FAIL / VOID
 
-- **PASS for Leads 1–3:** PID mesh targets resolve, a real peer edge is recorded, the GSTA130 gate releases, both players receive STAT4 + JoinCompleted, and both clients reach the same usable pre-match lobby.
-- **PARTIAL:** the full Leads 1–3 chain is proven but the lobby still fails. Freeze those findings as Confirmed and move investigation to documented Lead 4 / the first later divergence; do not reopen transport or connection-group identity.
-- **CLEAN FAIL:** exact v2 identity and promotion bundle execute without transport regression but the old loading boundary remains. Leads 1–3 are then fixed-but-not-sufficient.
-- **VOID:** wrong A/B branch or package, failed preflight, peer-gate rejection, wrong search order, stale process, crash before relevant GameSetup/mesh/GSTA boundary, missing evidence, or instrumentation reintroduced.
+- **PASS:** both clients reach the same usable pre-match lobby.
+- **PARTIAL:** the burst is emitted correctly, Leads 1–3 still complete, and the joiner's behaviour after GameSetup changes in any observable way. Record the new boundary.
+- **CLEAN FAIL:** the burst is emitted correctly, Leads 1–3 still complete, and the joiner behaves exactly as in `20260817-064947`. That refutes the burst as the blocking difference.
+- **VOID:** wrong A/B branch or package, failed preflight, peer-gate rejection, wrong search order, stale process, crash before GameSetup, missing evidence, or instrumentation reintroduced.
+
+**Regression signal to watch:** the burst is now the first traffic each client
+sees after GameSetup. If either client goes silent *earlier* than in
+`20260817-064947` — no `updateMeshConnection` at all — the burst itself is being
+rejected.
 
 ## Required evidence
 
@@ -60,4 +93,4 @@ Player A: exact run manifest, `relay-full.log`, newest `fifa15-trace-*.jsonl`, s
 
 Player B: automatic evidence ZIP plus exact attempt manifest. Preserve any crash/WER evidence.
 
-Do not exercise consumables, club items, Legends, tournaments, another matchmaking scenario, Lead 4 notification experiments, alternate GSU timing, or native instrumentation in this launch.
+Do not exercise `0x00C9`, alternate GSU timing, consumables, club items, Legends, tournaments, another matchmaking scenario, or native instrumentation in this launch.

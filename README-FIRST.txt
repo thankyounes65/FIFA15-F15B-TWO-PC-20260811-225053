@@ -4,11 +4,11 @@ FIFA 15 TWO-PC TEST - REMOTE PLAYER f15b
 CURRENT MATCHMAKING RUNTIME - 2026-08-17
 Player B is the dedicated portable repo/package for:
 
-  Candidate:       FIFA15-MM-WORKING-SERVER-PID-PROMOTION-V2
-  Package token:   F15B-MM-WORKING-SERVER-PID-PROMOTION-V2
-  Player B branch: integration/test-matchmaking-working-server-pid-promotion-v2
-  Player A branch: integration/test-matchmaking-working-server-pid-promotion-v2
-  Player A build:  build_pairing_working_server_pid_promotion_v2.rs
+  Candidate:       FIFA15-MM-WORKING-SERVER-SETUP-BURST-V3
+  Package token:   F15B-MM-WORKING-SERVER-SETUP-BURST-V3
+  Player B branch: integration/test-matchmaking-working-server-setup-burst-v3
+  Player A branch: integration/test-matchmaking-working-server-setup-burst-v3
+  Player A build:  build_pairing_working_server_setup_burst_v3.rs
 
 Use a FRESH GitHub ZIP of the branch named above, or of main (main is kept
 fast-forwarded to the current candidate), and extract it normally. Do not reuse
