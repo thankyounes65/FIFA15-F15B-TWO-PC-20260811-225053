@@ -121,4 +121,4 @@ Player A: exact run manifest, `relay-full.log`, newest `fifa15-trace-*.jsonl`, s
 
 Player B: automatic evidence ZIP plus exact attempt manifest, now including the wire capture and its summary. Preserve any crash/WER evidence.
 
-Do not exercise `USID` semantics, `0x0073` retiming, alternate GSU timing, consumables, club items, Legends, tournaments, another matchmaking scenario, or native instrumentation in this launch.
+Do not exercise `USID` semantics, alternate GSU timing, consumables, club items, Legends, tournaments, another matchmaking scenario, or native instrumentation in this launch.
