@@ -1,0 +1,4 @@
+
+# Package-local observer dependencies and per-run evidence (never committed)
+.observer-deps/
+runs/

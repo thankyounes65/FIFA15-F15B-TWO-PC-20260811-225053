@@ -16,7 +16,8 @@ $GameVerify = Join-Path $Root 'VERIFY-PLAYER-B-GAME-FILES.ps1'
 $RuntimeTest = Join-Path $Root 'RUNTIME-TEST.md'
 $FridaVersion = '17.9.11'
 $DependencyRoot = Join-Path $Root '.observer-deps'
-$FridaSite = Join-Path $DependencyRoot ("frida-$FridaVersion")
+$script:FridaSite = Join-Path $DependencyRoot ("frida-$FridaVersion")
+$script:FridaScope = 'package-local'
 $OriginalPythonPath = [string]$env:PYTHONPATH
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
@@ -70,10 +71,11 @@ function Get-Sha256OrUnavailable([string]$Path) {
 }
 
 function Set-ObserverPythonPath {
+    if ($script:FridaSite -eq 'system') { Restore-PythonPath; return }
     if ($OriginalPythonPath) {
-        $env:PYTHONPATH = "$FridaSite;$OriginalPythonPath"
+        $env:PYTHONPATH = "$($script:FridaSite);$OriginalPythonPath"
     } else {
-        $env:PYTHONPATH = $FridaSite
+        $env:PYTHONPATH = $script:FridaSite
     }
 }
 
@@ -85,51 +87,109 @@ function Restore-PythonPath {
     }
 }
 
-function Test-PinnedFrida {
-    if (-not (Test-Path -LiteralPath $FridaSite -PathType Container)) {
-        return $false
+# Ask the current Python what Frida it can import. The probe script always exits
+# 0 and never writes to stderr: redirecting a native command's stderr while
+# $ErrorActionPreference is 'Stop' turns a clean exit into a terminating
+# NativeCommandError, which is a trap this project has already been bitten by.
+function Get-FridaVersionString {
+    $script = "import sys" + [char]10 +
+              "try:" + [char]10 +
+              "    import frida" + [char]10 +
+              "    v = getattr(frida, '__version__', 'none')" + [char]10 +
+              "except Exception as exc:" + [char]10 +
+              "    v = 'IMPORT-FAILED:' + type(exc).__name__" + [char]10 +
+              "sys.stdout.write(v)"
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = & python -c $script
+    } catch {
+        $out = "PYTHON-FAILED"
+    } finally {
+        $ErrorActionPreference = $prev
     }
+    return (($out -join '').Trim())
+}
 
+# Import-test one candidate directory without committing to it. On success it
+# leaves PYTHONPATH pointing at that directory; on failure it restores PYTHONPATH
+# and reports why, because a silent failure here used to cost a whole run.
+function Test-FridaAt([string]$Candidate, [switch]$Quiet) {
+    if (-not $Candidate) { return $false }
+    if (-not (Test-Path -LiteralPath $Candidate -PathType Container)) { return $false }
+    $script:FridaSite = $Candidate
     Set-ObserverPythonPath
-    & python -c "import frida,sys; sys.exit(0 if getattr(frida,'__version__','') == '$FridaVersion' else 7)" 2>$null | Out-Null
-    $ok = $LASTEXITCODE -eq 0
+    $probe = Get-FridaVersionString
+    $ok = ($probe -eq $FridaVersion)
     if (-not $ok) {
+        if (-not $Quiet) {
+            Write-Host "  candidate rejected: $Candidate" -ForegroundColor DarkYellow
+            if ($probe) { Write-Host "    python said: $($probe -join ' ')" -ForegroundColor DarkYellow }
+        }
         Restore-PythonPath
+        $script:FridaSite = $null
     }
     return $ok
 }
 
+function Test-PinnedFrida {
+    return (Test-FridaAt (Join-Path $DependencyRoot ("frida-$FridaVersion")) -Quiet)
+}
+
+# Never delete an existing dependency directory. A previous run's directory can be
+# locked or otherwise undeletable, and `Remove-Item -Recurse -Force` failing there
+# aborted an entire run with "Access to the path ... is denied" even though a
+# perfectly good Frida was already installed. Instead: reuse any candidate that
+# imports, otherwise install into a fresh uniquely named directory.
 function Ensure-PinnedFrida {
-    if (Test-PinnedFrida) {
-        Write-Host "PASS: package-local Frida $FridaVersion is ready." -ForegroundColor Green
-        return
+    New-Item -ItemType Directory -Force -Path $DependencyRoot | Out-Null
+
+    $candidates = @()
+    $preferred = Join-Path $DependencyRoot ("frida-$FridaVersion")
+    if (Test-Path -LiteralPath $preferred -PathType Container) { $candidates += $preferred }
+    $candidates += @(Get-ChildItem -LiteralPath $DependencyRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "frida-$FridaVersion-*" -and $_.Name -notlike '*partial*' } |
+        Sort-Object LastWriteTimeUtc -Descending |
+        ForEach-Object { $_.FullName })
+
+    foreach ($candidate in $candidates) {
+        if (Test-FridaAt $candidate) {
+            $script:FridaScope = 'package-local'
+            Write-Host "PASS: package-local Frida $FridaVersion is ready ($candidate)." -ForegroundColor Green
+            return
+        }
     }
 
     Restore-PythonPath
-    New-Item -ItemType Directory -Force -Path $DependencyRoot | Out-Null
-    $partial = Join-Path $DependencyRoot ("frida-$FridaVersion.partial-$PID")
-    if (Test-Path -LiteralPath $partial) {
-        Remove-Item -LiteralPath $partial -Recurse -Force
-    }
-    New-Item -ItemType Directory -Force -Path $partial | Out-Null
+    $stamp = Get-Date -Format 'yyyyMMddHHmmss'
+    $fresh = Join-Path $DependencyRoot ("frida-$FridaVersion-$stamp-$PID")
+    New-Item -ItemType Directory -Force -Path $fresh | Out-Null
 
     Write-Host "Installing pinned Frida $FridaVersion into the extracted Player B package..." -ForegroundColor Cyan
-    & python -m pip install --disable-pip-version-check --no-input --only-binary=:all: --target $partial "frida==$FridaVersion"
+    & python -m pip install --disable-pip-version-check --no-input --only-binary=:all: --target $fresh "frida==$FridaVersion"
     $pipRc = [int]$LASTEXITCODE
     if ($pipRc -ne 0) {
-        Remove-Item -LiteralPath $partial -Recurse -Force -ErrorAction SilentlyContinue
-        throw "Could not bootstrap package-local Frida $FridaVersion (pip exit $pipRc). FIFA was not launched."
+        Write-Host "  pip returned $pipRc for the package-local install." -ForegroundColor DarkYellow
+    } elseif (Test-FridaAt $fresh) {
+        $script:FridaScope = 'package-local'
+        Write-Host "PASS: package-local Frida $FridaVersion installed and import-verified ($fresh)." -ForegroundColor Green
+        return
     }
 
-    if (Test-Path -LiteralPath $FridaSite) {
-        Remove-Item -LiteralPath $FridaSite -Recurse -Force
+    # Last resort: an already-importable Frida of the pinned version outside the
+    # package. This stops a run going VOID purely over dependency plumbing, and is
+    # recorded loudly in the manifest so the evidence stays truthful.
+    Restore-PythonPath
+    $script:FridaSite = $null
+    $sys = Get-FridaVersionString
+    if ($sys -eq $FridaVersion) {
+        $script:FridaSite = 'system'
+        $script:FridaScope = 'system-fallback'
+        Write-Warning "Package-local Frida bootstrap failed; using an already-installed system Frida $FridaVersion. Recorded as frida_scope=system-fallback."
+        return
     }
-    Move-Item -LiteralPath $partial -Destination $FridaSite
 
-    if (-not (Test-PinnedFrida)) {
-        throw "Package-local Frida $FridaVersion installed but could not be imported by this Python. FIFA was not launched."
-    }
-    Write-Host "PASS: package-local Frida $FridaVersion installed and import-verified." -ForegroundColor Green
+    throw "Could not provide Frida $FridaVersion (package-local install failed and no matching system Frida is importable). FIFA was not launched."
 }
 
 Assert-Files
@@ -279,7 +339,8 @@ try {
         "final_stage=$stage",
         'exact_b_head=portable-extracted-folder-no-git',
         "frida_version=$FridaVersion",
-        "frida_site=$FridaSite",
+        "frida_site=$($script:FridaSite)",
+        "frida_scope_resolved=$($script:FridaScope)",
         "package_runtime_test_sha256=$runtimeTestHash",
         "package_attest_sha256=$attestHash",
         "package_runner_sha256=$runnerHash",
@@ -287,10 +348,17 @@ try {
         "observer_text=$text"
     )
     if (Test-Path -LiteralPath $jsonl -PathType Leaf) {
+        # No 2>&1 on a native command: under ErrorActionPreference 'Stop' that
+        # turns a clean exit into a terminating NativeCommandError.
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
         try {
-            & python $Classifier '--player-a' $jsonl 2>&1 | Set-Content -LiteralPath $verdict -Encoding UTF8
+            $verdictText = & python $Classifier '--player-a' $jsonl
+            Set-Content -LiteralPath $verdict -Encoding UTF8 -Value $verdictText
         } catch {
             Set-Content -LiteralPath $verdict -Encoding UTF8 -Value "classifier failed: $($_.Exception.Message)"
+        } finally {
+            $ErrorActionPreference = $prevEap
         }
     }
     foreach ($path in @($jsonl,$text,$verdict)) {
