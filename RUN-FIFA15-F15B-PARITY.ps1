@@ -1,21 +1,10 @@
 <#
-Player B runner for the working-server parity test.
+Player B runner for the working-server PID promotion v2 test.
 
-No Frida. No native instrumentation of any kind is attached to fifa15.exe.
-
-Why: run 20260817 crashed FIFA on BOTH players while Frida was attached. On
-Player A the v1 crash was inside Frida Stalker's own RWX code cache; on Player B
-the v2 run crashed executing freed heap in FIFA's own MatchSession dispatch. A
-survived v2 and B did not, so whether Interceptor contributed on B is Unresolved
-- and there is no longer any reason to find out, because progress is now measured
-entirely from the relay log. Every Blaze message both clients send crosses our
-relay, so `scripts/score-matchmaking-progress.py` on Player A can tell how far
-each client got without touching the game process at all.
-
-Everything else about the Player B stack is unchanged: known-good file
-verification, Tailscale, hosts routing, the loopback forwarder, the LSX
-responder, peer attestation, the certificate patch, evidence collection and
-exact restoration.
+No Frida or other in-process instrumentation is attached to fifa15.exe. Player B
+keeps the already-proven boot/connect stack unchanged. This branch changes only
+candidate/package provenance so Player A can test Leads 1-3 as the sole runtime
+protocol variable.
 #>
 [CmdletBinding()]
 param([switch]$SelfTest)
@@ -31,9 +20,12 @@ $Network = Join-Path $Root 'guest-network-observer.ps1'
 $Forwarder = Join-Path $Root 'loopback-relay-forwarder.ps1'
 $Tailscale = Join-Path $Root 'tailscale-bootstrap.ps1'
 $Diagnostic = Join-Path $Root 'diagnostic-run.ps1'
+$ExpectedBranch = 'integration/test-matchmaking-working-server-pid-promotion-v2'
+$Candidate = 'FIFA15-MM-WORKING-SERVER-PID-PROMOTION-V2'
+$Package = 'F15B-MM-WORKING-SERVER-PID-PROMOTION-V2'
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
-$attempt = Join-Path $Root ("runs\matchmaking-working-server-parity\player-b\$stamp")
+$attempt = Join-Path $Root ("runs\matchmaking-working-server-pid-promotion-v2\player-b\$stamp")
 $manifest = Join-Path $attempt 'RUN-MANIFEST.txt'
 
 $networkActive = $false
@@ -56,7 +48,9 @@ function Assert-Files {
         'tailscale-bootstrap.ps1',
         'VERIFY-PLAYER-B-GAME-FILES.ps1',
         'COLLECT-PLAYER-B-EVIDENCE.ps1',
-        'RUNTIME-TEST.md'
+        'RUNTIME-TEST.md',
+        'APPLIANCE-CONFIG.json',
+        'PACKAGE-MANIFEST.json'
     )) {
         if (-not (Test-Path -LiteralPath (Join-Path $Root $name) -PathType Leaf)) {
             throw "Missing Player B prerequisite: $name"
@@ -80,10 +74,8 @@ if ($SelfTest) {
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Attest,'-SelfTest')
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Network,'-SelfTest')
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
-    # No in-process instrumentation may come back. The tokens are assembled at
-    # runtime so this guard cannot match its own source text.
     $banned = @(
-        ('fri' + 'da==') ,
+        ('fri' + 'da=='),
         ('pip' + ' install'),
         ('PYTHON' + 'PATH'),
         ('.observer' + '-deps'),
@@ -92,30 +84,33 @@ if ($SelfTest) {
     )
     foreach ($token in $banned) {
         if ($source.Contains($token)) {
-            throw "Player B parity runner reintroduced in-process instrumentation: $token"
+            throw "Player B v2 runner reintroduced in-process instrumentation: $token"
         }
     }
-    # The runner must not launch a Python observer process either.
     if ($source -match "Start-Process\s+-FilePath\s+'python'") {
-        throw 'Player B parity runner reintroduced a Python observer process.'
+        throw 'Player B v2 runner reintroduced a Python observer process.'
     }
-    Write-Host 'PASS: Player B working-server-parity runner attaches nothing to fifa15.exe, installs no Python dependency, is portable from an extracted folder, has no scenario selector, and self-heals stale helper state.' -ForegroundColor Green
+    Write-Host "PASS: Player B v2 runner pins $ExpectedBranch / $Candidate / $Package, attaches nothing to fifa15.exe, and retains the known-good boot/connect stack." -ForegroundColor Green
     exit 0
 }
 
 New-Item -ItemType Directory -Force -Path $attempt | Out-Null
 @(
-    'FIFA15 working-server parity - Player B',
+    'FIFA15 working-server PID promotion v2 - Player B',
     "started_utc=$((Get-Date).ToUniversalTime().ToString('o'))",
-    'branch=integration/test-matchmaking-working-server-parity-v1',
+    "branch=$ExpectedBranch",
+    "candidate_id=$Candidate",
+    "package_attestation=$Package",
     'package_mode=portable-extracted-folder',
     'requires_git_checkout=false',
     'native_instrumentation=none',
     'frida_used=false',
     'wire_change=true_on_player_a_only',
+    'player_a_wire_scope=lead1_pid_identity+lead2_mesh_resolution+lead3_retail_promotion_gate',
+    'lead4_enabled=false',
     'scenario_selection=false',
-    'progress_measured_from=player_a_relay_log',
-    'reference=docs/MATCHMAKING-WORKING-SERVER-GAMESETUP-DIFF.md'
+    'progress_measured_from=player_a_relay_log_and_trace',
+    'reference=docs/MATCHMAKING-20260817-PARITY-OFFLINE-LEADS.md'
 ) | Set-Content -LiteralPath $manifest -Encoding UTF8
 
 try {
@@ -132,8 +127,6 @@ try {
     $tailscaleAttempted = $true
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Tailscale)
 
-    # Reclaim anything a previous crashed or aborted run left behind, so the
-    # operator never has to kill a stale PID by hand.
     $stage = 'stale_helper_reset'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Network -Reset
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Forwarder -Stop 2>$null | Out-Null
@@ -177,9 +170,10 @@ try {
         'exact_b_head=portable-extracted-folder-no-git',
         "package_runtime_test_sha256=$(Get-Sha256OrUnavailable $RuntimeTest)",
         "package_attest_sha256=$(Get-Sha256OrUnavailable $Attest)",
-        "package_runner_sha256=$(Get-Sha256OrUnavailable $PSCommandPath)"
+        "package_runner_sha256=$(Get-Sha256OrUnavailable $PSCommandPath)",
+        "package_manifest_sha256=$(Get-Sha256OrUnavailable (Join-Path $Root 'PACKAGE-MANIFEST.json'))",
+        "appliance_config_sha256=$(Get-Sha256OrUnavailable (Join-Path $Root 'APPLIANCE-CONFIG.json'))"
     )
-    # Always collect, even after a crash. This is what run 20260817 could not do.
     try {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'COLLECT-PLAYER-B-EVIDENCE.ps1')
     } catch { Write-Warning "evidence collection failed: $($_.Exception.Message)" }
@@ -187,8 +181,8 @@ try {
 
 Write-Host ''
 Write-Host '====================================================================' -ForegroundColor Cyan
-Write-Host '  PLAYER B WORKING-SERVER PARITY RUN FINISHED' -ForegroundColor Cyan
+Write-Host '  PLAYER B PID-PROMOTION V2 RUN FINISHED' -ForegroundColor Cyan
 Write-Host '====================================================================' -ForegroundColor Cyan
 Write-Host "Manifest: $attempt" -ForegroundColor Green
-Write-Host 'Nothing was attached to fifa15.exe. Progress is scored from the Player A relay log.' -ForegroundColor Gray
+Write-Host 'Nothing was attached to fifa15.exe. Progress is scored from Player A relay/trace evidence.' -ForegroundColor Gray
 exit $rc
