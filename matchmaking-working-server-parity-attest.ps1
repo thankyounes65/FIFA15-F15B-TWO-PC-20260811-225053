@@ -26,6 +26,7 @@ function Assert-LocalState {
         'diagnostic-run.ps1',
         'guest-network-observer.ps1',
         'VERIFY-PLAYER-B-GAME-FILES.ps1',
+        'capture-blaze-traffic.ps1',
         'APPLIANCE-CONFIG.json',
         'PACKAGE-MANIFEST.json'
     )) {
@@ -47,11 +48,16 @@ function Assert-LocalState {
     if ([string]$overlay.expected_host_build -ne $ExpectedHostBuild) { throw "PACKAGE-MANIFEST host build mismatch: $($overlay.expected_host_build)" }
     if ([string]$overlay.wire_protocol_baseline_commit -ne $ExpectedBaseline) { throw "PACKAGE-MANIFEST baseline mismatch: $($overlay.wire_protocol_baseline_commit)" }
     # v3 IS the Lead 4 post-GameSetup burst, so recording it as disabled would be
-    # false provenance. What must stay off is 0x00C9, whose document has never
-    # been decoded - only its field names were ever observed.
+    # false provenance.
     if (-not [bool]$overlay.lead4_enabled) { throw 'PACKAGE-MANIFEST does not record the Lead 4 burst this candidate tests.' }
-    if ([bool]$overlay.lead4_00c9_reproduced) { throw 'PACKAGE-MANIFEST claims 0x00C9 is reproduced; its document has never been decoded.' }
-    if ([string]$overlay.lead4_scope -ne '4a_0016_peer_msid+4b_00e7+4b_0064_gsta1') { throw "PACKAGE-MANIFEST Lead 4 scope mismatch: $($overlay.lead4_scope)" }
+    # 0x00C9 is now decoded from the lossless capture, so reproducing it is
+    # evidence-backed rather than invention. What must stay true is that the
+    # two lifecycle corrections are declared and Player B changes no wire.
+    if (-not [bool]$overlay.lead4_00c9_reproduced) { throw 'PACKAGE-MANIFEST no longer reproduces the decoded 0x00C9.' }
+    if ([string]$overlay.lead4_scope -ne '4a_0016_peer_msid+4b_00e7+4b_0064_gsta1+4b_00c9') { throw "PACKAGE-MANIFEST Lead 4 scope mismatch: $($overlay.lead4_scope)" }
+    if ([bool]$overlay.gsta130_echo_gated_on_peer_edge) { throw 'PACKAGE-MANIFEST still gates the GSTA=130 echo; the capture shows it ungated.' }
+    if ([string]$overlay.promotion_bundle_order -ne 'paired_per_player') { throw "PACKAGE-MANIFEST promotion order mismatch: $($overlay.promotion_bundle_order)" }
+    if ([string]$overlay.player_b_wire_capture -notmatch '42128') { throw 'PACKAGE-MANIFEST does not declare the Player B Blaze wire capture.' }
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
@@ -73,7 +79,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B setup-burst v3 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 4 scope=$($PackageManifest.matchmaking_overlay.lead4_scope), and 0x00C9 not reproduced." -ForegroundColor Green
+    Write-Host "PASS: portable Player B setup-burst v3 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 4 scope=$($PackageManifest.matchmaking_overlay.lead4_scope), ungated GSTA=130 echo, paired promotion, and a filtered Player B wire capture on 42128." -ForegroundColor Green
     exit 0
 }
 

@@ -19,7 +19,7 @@ unchanged here:
 
 - every mesh `TCG` resolved to the real peer (0 unknown, previously all unknown);
 - self announcements never promote; the genuine cross-player CONNECTED edge does;
-- `GSTA=130` is held until that edge arrives;
+- the client owns `GSTA=130` (v3 corrects only *when* the relay echoes it);
 - both players then receive `GSTA130 → STAT=4 ×2 → JoinCompleted ×2`, once each, with no premature host `JoinCompleted`;
 - neither client sends `leaveGameByGroup` any more.
 
@@ -32,22 +32,18 @@ notifications between `NotifyGameSetup` and the client's first
 `updateMeshConnection`, back-to-back with no client traffic in between:
 
 ```
-S 0x0014  GameSetup, REAS.VALU.MSID = this client's own session
-S 0x00E7  GID only
-S 0x0016  GameSetup, byte-identical except REAS.VALU.MSID = the PEER's session
-S 0x0064  GID + GSTA = 1
-S 0x00C9  DONE/GLID/REMV/UPDT
+S 0x0014  GameSetup, MSID = this client's own session      (1136 B)
+S 0x00E7  {GID}                                               (8 B)
+S 0x0016  GameSetup, ONE byte different: MSID = the PEER's (1136 B)
+S 0x0064  {GID, GSTA: 1}                                     (13 B)
+S 0x00C9  {DONE:1, GLID:1, REMV:[], UPDT:[]}                 (22 B)
 C 0x001D  updateMeshConnection
 ```
 
-Run `20260817-064947` sent none of `0x00E7` or `0x0064(GSTA=1)`, sent no
-`0x0016` to the host at all, and gave the guest a `0x0016` carrying its own
-session id rather than the peer's. Player A v3 emits the first three to **both**
-clients in the captured order and position.
-
-`0x00C9` is deliberately **not** reproduced: only its field names were ever
-observed, with no types, values, order or counts, so building it would mean
-inventing a wire document.
+Player A v3 emits all four to **both** clients in the captured order, and also
+corrects two things in the same window: `GSTA=130` is echoed **ungated** (retail
+echoes it 260 ms before the peer edge exists), and the promotion bundle is
+**paired per player** rather than batched.
 
 ## Exact actions
 
@@ -71,9 +67,11 @@ NotifyGameSetup (real pair …)
 Notify0x00E7 (working server setup burst, GID only)
 NotifyJoiningPlayerInitiateConnections (working server setup burst, peer MSID)
 NotifyGameStateChange (working server setup burst, GSTA=1)
+Notify0x00C9 (working server setup burst, empty game list update)
 ```
 
-with the inherited Leads 1–3 chain still completing unchanged afterwards.
+with the inherited Leads 1–3 chain still completing unchanged afterwards, and
+the scorecard showing `GSTA130 still held: 0` and `promotion batched runs: 0`.
 
 ## PASS / PARTIAL / CLEAN FAIL / VOID
 
@@ -87,10 +85,28 @@ sees after GameSetup. If either client goes silent *earlier* than in
 `20260817-064947` — no `updateMeshConnection` at all — the burst itself is being
 rejected.
 
+## New in this package: the Player B wire capture
+
+`RUN-FIFA15-F15B.bat` now starts a **filtered** pktmon capture before the peer
+gate and stops it after FIFA closes, writing the `.pcapng`, the raw `.etl` and
+`WIRE-CAPTURE-SUMMARY.txt` into this attempt's folder, which the evidence ZIP
+already sweeps. It is passive NIC capture; nothing attaches to `fifa15.exe`.
+
+It exists because Player A's relay log proves only what the relay **sent** —
+"notification sent successfully" means its socket accepted the bytes. If FIFA
+rejects a frame it resets the connection, and only a capture on this machine
+shows which frame immediately preceded the RST.
+
+The filter is narrow (TCP 42128/42127/42230/17502/17503, UDP 3659/11000/11001)
+precisely so it cannot drop packets: the retail "golden" capture was unfiltered
+and lost a whole frame out of the burst under investigation. The summary reports
+pktmon's own drop counters, and if they are non-zero the capture is **not**
+admissible as evidence that something was never sent.
+
 ## Required evidence
 
 Player A: exact run manifest, `relay-full.log`, newest `fifa15-trace-*.jsonl`, scorecard, gameplay UDP summary and crash summary if applicable.
 
-Player B: automatic evidence ZIP plus exact attempt manifest. Preserve any crash/WER evidence.
+Player B: automatic evidence ZIP plus exact attempt manifest, now including the wire capture and its summary. Preserve any crash/WER evidence.
 
-Do not exercise `0x00C9`, alternate GSU timing, consumables, club items, Legends, tournaments, another matchmaking scenario, or native instrumentation in this launch.
+Do not exercise `USID` semantics, `0x0073` retiming, alternate GSU timing, consumables, club items, Legends, tournaments, another matchmaking scenario, or native instrumentation in this launch.

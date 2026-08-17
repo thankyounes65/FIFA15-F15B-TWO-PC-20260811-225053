@@ -22,6 +22,7 @@ $Forwarder = Join-Path $Root 'loopback-relay-forwarder.ps1'
 $Tailscale = Join-Path $Root 'tailscale-bootstrap.ps1'
 $Diagnostic = Join-Path $Root 'diagnostic-run.ps1'
 $Collect = Join-Path $Root 'COLLECT-PLAYER-B-EVIDENCE.ps1'
+$Capture = Join-Path $Root 'capture-blaze-traffic.ps1'
 $ExpectedBranch = 'integration/test-matchmaking-working-server-setup-burst-v3'
 $Candidate = 'FIFA15-MM-WORKING-SERVER-SETUP-BURST-V3'
 $Package = 'F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
@@ -31,6 +32,7 @@ $attempt = Join-Path $Root ("runs\matchmaking-working-server-setup-burst-v3\play
 $manifest = Join-Path $attempt 'RUN-MANIFEST.txt'
 
 $networkActive = $false
+$captureActive = $false
 $forwarderActive = $false
 $tailscaleAttempted = $false
 $rc = 1
@@ -50,6 +52,7 @@ function Assert-Files {
         'tailscale-bootstrap.ps1',
         'VERIFY-PLAYER-B-GAME-FILES.ps1',
         'COLLECT-PLAYER-B-EVIDENCE.ps1',
+        'capture-blaze-traffic.ps1',
         'RUNTIME-TEST.md',
         'APPLIANCE-CONFIG.json',
         'PACKAGE-MANIFEST.json'
@@ -79,6 +82,9 @@ if ($SelfTest) {
     # regression there is invisible until the ZIP arrives without the attempt
     # manifest, so prove it here rather than after the run.
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Collect,'-SelfTest')
+    # Player A's relay log proves what it SENT. Only a capture here shows
+    # what arrived and, if FIFA rejects a frame, which frame preceded the RST.
+    Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Capture,'-SelfTest')
     $source = Get-Content -LiteralPath $PSCommandPath -Raw
     $banned = @(
         ('fri' + 'da=='),
@@ -112,13 +118,18 @@ New-Item -ItemType Directory -Force -Path $attempt | Out-Null
     'native_instrumentation=none',
     'frida_used=false',
     'wire_change=true_on_player_a_only',
-    'player_a_wire_scope=post_gamesetup_burst_00e7_then_0016_peer_msid_then_0064_gsta1',
+    'player_a_wire_scope=post_gamesetup_burst_00e7_0016_peer_msid_0064_gsta1_00c9+ungated_gsta130_echo+paired_promotion',
     'leads_1_3_inherited_unchanged=true',
     'lead4_enabled=true',
-    'lead4_scope=4a_0016_peer_msid+4b_00e7+4b_0064_gsta1',
-    'lead4_00c9_reproduced=false',
+    'lead4_scope=4a_0016_peer_msid+4b_00e7+4b_0064_gsta1+4b_00c9',
+    'lead4_00c9_reproduced=true',
+    'lead4_00c9_basis=decoded_from_lossless_capture_empty_lists',
+    'gsta130_echo_gated_on_peer_edge=false',
+    'promotion_bundle_order=paired_per_player',
     'scenario_selection=false',
     'progress_measured_from=player_a_relay_log_and_trace',
+    'player_b_wire_capture=filtered_pktmon_full_packets',
+    'player_b_wire_capture_blaze_port=42128',
     'reference=docs/MATCHMAKING-WORKING-SERVER-SETUP-BURST-V3.md'
 ) | Set-Content -LiteralPath $manifest -Encoding UTF8
 
@@ -148,6 +159,10 @@ try {
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Network,'-Start')
     $networkActive = $true
 
+    $stage = 'wire_capture_start'
+    Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Capture,'-Start')
+    $captureActive = $true
+
     $stage = 'peer_gate'
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Attest)
 
@@ -163,6 +178,9 @@ try {
     }
     $rc = 1
 } finally {
+    if ($captureActive) {
+        try { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Capture -Stop -OutDir $attempt } catch { Write-Warning $_ }
+    }
     if ($networkActive) {
         try { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Network -Stop } catch { Write-Warning $_ }
     }
