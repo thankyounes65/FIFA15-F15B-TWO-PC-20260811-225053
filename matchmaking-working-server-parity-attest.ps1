@@ -9,10 +9,10 @@ $Config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $PackageManifest=Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-WORKING-SERVER-LOBBY-ENTRY-V4'
+$Candidate='FIFA15-MM-WORKING-SERVER-PEER-SESSION-V5'
 $Package='F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 $ExpectedBranch='integration/test-matchmaking-working-server-setup-burst-v3'
-$ExpectedHostBuild='build_pairing_working_server_lobby_entry_v4.rs'
+$ExpectedHostBuild='build_pairing_working_server_peer_session_v5.rs'
 $ExpectedBaseline='8ac9f914685ddf8dc60ca95a21addb674de6716b'
 
 function Assert-LocalState {
@@ -63,6 +63,15 @@ function Assert-LocalState {
     if (-not $overlay.async_status_0x000c_per_client) { throw 'PACKAGE-MANIFEST must declare the per-client 0x000C async status.' }
     if (-not $overlay.game_settings_0x006e_mirrored_to_both) { throw 'PACKAGE-MANIFEST must declare the 0x006E game-settings mirror.' }
     if (-not [string]$overlay.lead5_fifa_division_deliberately_not_sent) { throw 'PACKAGE-MANIFEST must record why fifaDivision is deliberately not sent.' }
+    # Peer session v5. The document must be declared as being about the
+    # PEER; the self-directed 0x0001 has always been sent and closes nothing.
+    if ([string]$overlay.lead6_scope -ne 'peer_usersession_extended_data_0x0001+open_nat_type') { throw "PACKAGE-MANIFEST Lead 6 scope mismatch: $($overlay.lead6_scope)" }
+    if (-not $overlay.peer_extended_data_0x0001_sent_before_gamesetup) { throw 'PACKAGE-MANIFEST must declare the peer 0x0001 sent before GameSetup.' }
+    if ([int]$overlay.peer_published_nat_type -ne 1) { throw "PACKAGE-MANIFEST must declare the open published NAT type, found: $($overlay.peer_published_nat_type)" }
+    if ([int]$overlay.peer_observed_nat_type -ne 5) { throw "PACKAGE-MANIFEST must record the observed NAT stub it replaces, found: $($overlay.peer_observed_nat_type)" }
+    if (-not $overlay.peer_bandwidth_not_fabricated_from_capture) { throw 'PACKAGE-MANIFEST must record that retail bandwidth is not fabricated.' }
+    if (-not [string]$overlay.lead6_hnet_hypothesis_refuted) { throw 'PACKAGE-MANIFEST must record that the v4 HNET hypothesis was refuted.' }
+
 
     if ([bool]$overlay.gsta130_echo_gated_on_peer_edge) { throw 'PACKAGE-MANIFEST still gates the GSTA=130 echo; the capture shows it ungated.' }
     if ([string]$overlay.promotion_bundle_order -ne 'paired_per_player') { throw "PACKAGE-MANIFEST promotion order mismatch: $($overlay.promotion_bundle_order)" }
@@ -77,8 +86,8 @@ function Assert-LocalState {
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
-    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server Lobby Entry v4')) {
-        throw 'RUNTIME-TEST.md is not the Player B lobby-entry v4 package contract.'
+    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server Peer Session v5')) {
+        throw 'RUNTIME-TEST.md is not the Player B peer-session v5 package contract.'
     }
     if (-not $runtimeText.Contains($ExpectedBranch)) {
         throw "RUNTIME-TEST.md does not pin expected branch $ExpectedBranch."
@@ -95,7 +104,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B lobby-entry v4 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 5 scope=$($PackageManifest.matchmaking_overlay.lead5_scope) (GAME.HNET as NetworkAddress arm 2 so the joiner starts its peer flow, 0x000C after each StartMatchmaking ack, 0x0004 answered and mirrored as 0x006E), the whole setup-burst v3 window inherited unchanged, fifaDivision deliberately not fabricated for game mode 81, and a filtered Player B wire capture on 42128." -ForegroundColor Green
+    Write-Host "PASS: portable Player B peer-session v5 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 6 scope=$($PackageManifest.matchmaking_overlay.lead6_scope) (UserSessions 0x0001 sent for the PEER in the captured lean shape immediately before GameSetup, publishing the open NAT type 1 in place of the unmeasured stub 5 as a separately scored second variable), retail bandwidth deliberately not fabricated, the refuted v4 HNET hypothesis recorded, lobby-entry v4 and setup-burst v3 inherited unchanged, and a filtered Player B wire capture on 42128." -ForegroundColor Green
     exit 0
 }
 
