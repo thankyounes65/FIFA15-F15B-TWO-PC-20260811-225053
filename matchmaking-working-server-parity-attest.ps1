@@ -9,10 +9,10 @@ $Config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $PackageManifest=Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-WORKING-SERVER-QOS-PROBE-V8'
+$Candidate='FIFA15-MM-WORKING-SERVER-QOS-CONFIG-V9'
 $Package='F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 $ExpectedBranch='integration/test-matchmaking-working-server-setup-burst-v3'
-$ExpectedHostBuild='build_pairing_working_server_qos_probe_v8.rs'
+$ExpectedHostBuild='build_pairing_working_server_qos_config_v9.rs'
 $ExpectedBaseline='8ac9f914685ddf8dc60ca95a21addb674de6716b'
 
 function Assert-LocalState {
@@ -92,9 +92,14 @@ function Assert-LocalState {
     if (-not $overlay.lead9_firewall_opens_udp_17502) { throw 'PACKAGE-MANIFEST must record that UDP 17502 is opened; without it the probes never arrive and the measurement silently never completes.' }
     if (-not [string]$overlay.lead9_ping_site_now_routable) { throw 'PACKAGE-MANIFEST must record why the ping site moved off loopback.' }
     if ([string]$overlay.lead9_firetype_to_natt_mapping -notmatch 'unresolved') { throw 'PACKAGE-MANIFEST must keep the firetype-to-NATT mapping recorded as unresolved.' }
-
-
-
+    # QoS config v9. v8 proved its own routes were never exercised - the gate is
+    # the QOSS block itself, one step earlier. The manifest must scope the SVID
+    # fix to the profile that actually runs, not claim a blanket rewrite.
+    if ([string]$overlay.lead10_scope -ne 'qoss_time_added_universal+qoss_svid_fifa14compat_profile_no_longer_zero') { throw "PACKAGE-MANIFEST Lead 10 scope mismatch: $($overlay.lead10_scope)" }
+    if ([int]$overlay.lead10_time_added_ms -ne 5000) { throw "PACKAGE-MANIFEST must declare retail's QOSS.TIME value, found: $($overlay.lead10_time_added_ms)" }
+    if ([int]$overlay.lead10_svid_value -ne 1161889797) { throw "PACKAGE-MANIFEST must declare retail's QOSS.SVID value, found: $($overlay.lead10_svid_value)" }
+    if (-not $overlay.lead10_svid_fix_scoped_to_running_profile_only) { throw 'PACKAGE-MANIFEST must record that the SVID fix is scoped to the profile that actually runs, not a blanket change.' }
+    if (-not [string]$overlay.lead10_corroboration) { throw 'PACKAGE-MANIFEST must record the FIFA14 cross-reference corroboration, distinct from FIFA15 evidence.' }
 
 
     if ([bool]$overlay.gsta130_echo_gated_on_peer_edge) { throw 'PACKAGE-MANIFEST still gates the GSTA=130 echo; the capture shows it ungated.' }
@@ -110,8 +115,8 @@ function Assert-LocalState {
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
-    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server QoS Probe v8')) {
-        throw 'RUNTIME-TEST.md is not the Player B QoS-probe v8 package contract.'
+    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server QoS Config v9')) {
+        throw 'RUNTIME-TEST.md is not the Player B QoS-config v9 package contract.'
     }
     if (-not $runtimeText.Contains($ExpectedBranch)) {
         throw "RUNTIME-TEST.md does not pin expected branch $ExpectedBranch."
@@ -128,7 +133,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B QoS-probe v8 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 9 scope=$($PackageManifest.matchmaking_overlay.lead9_scope) (the bandwidth, firewall and firetype routes Player A never answered plus a UDP probe responder, so each client finally measures its own capacity and NAT type), the ping site moved off loopback because this packages forwarder is TCP-only, UDP 17502 opened, the firetype-to-NATT mapping kept recorded as unresolved, peer-QoS v7 and earlier inherited unchanged, and a filtered Player B wire capture on 42128." -ForegroundColor Green
+    Write-Host "PASS: portable Player B QoS-config v9 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 10 scope=$($PackageManifest.matchmaking_overlay.lead10_scope) (QOSS.TIME added universally at 5000, and the fifa14-compat profile's QOSS.SVID moved off a deliberate 0 to retail's own 1161889797, scoped to the profile that actually runs), per-probe UDP trace counters added, gameplay UDP capture filters now include 17502, QoS-probe v8 and earlier inherited unchanged, and a filtered Player B wire capture on 42128." -ForegroundColor Green
     exit 0
 }
 

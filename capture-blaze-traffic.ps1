@@ -45,8 +45,13 @@ $StatePath = Join-Path $env:TEMP 'fifa15-f15b-blaze-capture.json'
 # 42128 is the decisive one: it carries GameSetup and the whole post-GameSetup
 # notification burst in plaintext, and decodes with the main repo's
 # scripts/blaze-capture tooling.
+# UDP 17502 added 2026-08-18 (qos-config-v9): the QoS UDP probe responder
+# lived on this port since v8, but neither side's capture filter included its
+# UDP half - only the TCP HTTP handshake - so whether a probe ever actually
+# arrived was unobservable. Same port appears in both TCP and UDP lists on
+# purpose (HTTP handshake, then UDP probes, to the same port).
 $TcpPorts = @(42128, 42127, 42230, 17502, 17503)
-$UdpPorts = @(3659, 11000, 11001)
+$UdpPorts = @(3659, 11000, 11001, 17502)
 
 function Info([string]$m) { Write-Host "  $m" -ForegroundColor Gray }
 function Fail([string]$m) { Write-Host "BLAZE CAPTURE ERROR: $m" -ForegroundColor Red; exit 1 }
