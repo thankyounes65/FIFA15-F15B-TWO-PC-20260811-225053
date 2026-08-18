@@ -1,14 +1,15 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title FIFA 15 Player B - Working-Server Setup Burst v3
+title FIFA 15 Player B - Working-Server Relay Topology v6
 
 echo ====================================================================
-echo   FIFA 15 PLAYER B - WORKING-SERVER SETUP BURST V3
+echo   FIFA 15 PLAYER B - WORKING-SERVER RELAY TOPOLOGY V6
 echo ====================================================================
 echo   Player B's wire is unchanged. No scenario selection.
-echo   Player A is testing the post-GameSetup notification burst only.
-echo   Candidate: FIFA15-MM-WORKING-SERVER-SETUP-BURST-V3
+echo   Player A advertises both players at its UDP relay (11000/11001),
+echo   matching retail's server-relayed peer addressing.
+echo   Candidate: FIFA15-MM-WORKING-SERVER-RELAY-TOPOLOGY-V6
 echo ====================================================================
 echo.
 

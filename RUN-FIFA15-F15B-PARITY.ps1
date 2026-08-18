@@ -102,7 +102,21 @@ if ($SelfTest) {
     if ($source -match "Start-Process\s+-FilePath\s+'python'") {
         throw 'Player B relay-topology v6 runner reintroduced a Python observer process.'
     }
-    Write-Host "PASS: Player B relay-topology v6 runner pins $ExpectedBranch / $Candidate / $Package, attaches nothing to fifa15.exe, and retains the known-good boot/connect stack." -ForegroundColor Green
+    # RUN-FIFA15-F15B.bat prints its own hardcoded candidate banner before this
+    # script ever runs, and nothing previously checked it against $Candidate.
+    # It silently drifted for two whole candidates (v4, v5) with every other
+    # self-test still green, because the banner is cosmetic and gates nothing -
+    # until an operator reads it and reasonably concludes the wrong candidate
+    # is loaded. Checked here so that class of drift fails the self-test.
+    $launcherPath = Join-Path $Root 'RUN-FIFA15-F15B.bat'
+    if (-not (Test-Path -LiteralPath $launcherPath -PathType Leaf)) {
+        throw "Missing Player B launcher: $launcherPath"
+    }
+    $launcherText = Get-Content -LiteralPath $launcherPath -Raw
+    if (-not $launcherText.Contains($Candidate)) {
+        throw "RUN-FIFA15-F15B.bat banner does not name the current candidate $Candidate; it will mislead the operator even though every other self-test passes."
+    }
+    Write-Host "PASS: Player B relay-topology v6 runner pins $ExpectedBranch / $Candidate / $Package, attaches nothing to fifa15.exe, retains the known-good boot/connect stack, and RUN-FIFA15-F15B.bat's own banner names the current candidate." -ForegroundColor Green
     exit 0
 }
 
