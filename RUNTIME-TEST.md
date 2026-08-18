@@ -1,4 +1,4 @@
-# FIFA15 Player B Working-Server QoS Reply v10
+# FIFA15 Player B Working-Server QoS Bandwidth-Ack v11
 
 **Subsystem:** the QoS probe reply payload — the 30 bytes Player A's server sends back for every UDP probe, which the client needs before it will move on to the bandwidth phase.
 
@@ -6,9 +6,9 @@
 
 **Player A required branch:** `thankyounes65/fifa15-relay-clean` / `integration/test-matchmaking-working-server-setup-burst-v3`
 
-**Player A build:** `build_pairing_working_server_qos_reply_v10.rs`, parent `build_pairing_working_server_qos_config_v9.rs`
+**Player A build:** `build_pairing_working_server_qos_bandwidth_ack_v11.rs`, parent `build_pairing_working_server_qos_reply_v10.rs`
 
-**Candidate/package:** `FIFA15-MM-WORKING-SERVER-QOS-REPLY-V10` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`, peer gate TCP 48216.
+**Candidate/package:** `FIFA15-MM-WORKING-SERVER-QOS-BW-ACK-V11` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`, peer gate TCP 48216.
 
 **No instrumentation.** Nothing is attached to `fifa15.exe` on either machine. Player B remains a normal second client using the already-proven Tailscale/hosts/loopback/LSX/certificate/evidence stack. Retail `fifa15.exe` SHA-256 remains `3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB` and no game file is modified. **Player B's wire is unchanged in this candidate** — the only variable is the bytes Player A puts in its QoS replies.
 
@@ -63,7 +63,7 @@ Player A therefore implements the **rule**, and keeps retail's literal constant 
 1. Player A uses the Universal Branch Tester and selects `integration/test-matchmaking-working-server-setup-burst-v3`.
 2. Player A must require `launch\VERIFY-BUILD.bat` to PASS before FIFA starts.
 3. Player B uses a FRESH ZIP of this exact branch and runs `RUN-FIFA15-F15B.bat` as Administrator.
-4. Require the peer gate to accept exact candidate/package `FIFA15-MM-WORKING-SERVER-QOS-REPLY-V10` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`.
+4. Require the peer gate to accept exact candidate/package `FIFA15-MM-WORKING-SERVER-QOS-BW-ACK-V11` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`.
 5. Both enter FUT → Online Single Match. **A searches first, B searches second.**
 6. Do not cancel or retry after pairing.
 7. If both reach the shared lobby, B readies first, then A. Continue toward kickoff only while stable.

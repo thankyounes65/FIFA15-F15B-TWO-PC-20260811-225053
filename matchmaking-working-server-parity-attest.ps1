@@ -9,10 +9,10 @@ $Config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $PackageManifest=Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-WORKING-SERVER-QOS-REPLY-V10'
+$Candidate='FIFA15-MM-WORKING-SERVER-QOS-BW-ACK-V11'
 $Package='F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 $ExpectedBranch='integration/test-matchmaking-working-server-setup-burst-v3'
-$ExpectedHostBuild='build_pairing_working_server_qos_reply_v10.rs'
+$ExpectedHostBuild='build_pairing_working_server_qos_bandwidth_ack_v11.rs'
 $ExpectedBaseline='8ac9f914685ddf8dc60ca95a21addb674de6716b'
 
 function Assert-LocalState {
@@ -111,6 +111,19 @@ function Assert-LocalState {
     if ([string]$overlay.lead11_small_probe_marker_status -notmatch 'inference') { throw 'PACKAGE-MANIFEST must keep the small-probe marker recorded as an inference, not a confirmed address.' }
     if (-not [string]$overlay.lead11_validated_by_byte_for_byte_replay) { throw 'PACKAGE-MANIFEST must record that the reply rule is validated against the captured bytes.' }
     if (-not [bool]$overlay.lead11_every_qos_message_now_byte_verified) { throw 'PACKAGE-MANIFEST must record that every QoS message is byte-verified against the capture.' }
+    # Lead 11 was a PARTIAL, and the manifest must say so - it is the first
+    # forward movement in six candidates and recording it as a plain pass or a
+    # plain failure would both be false provenance.
+    if ([string]$overlay.lead11_result -notmatch 'PARTIAL') { throw 'PACKAGE-MANIFEST must record Lead 11 as the partial it was.' }
+    # QoS bandwidth-ack v12. The acknowledgement is the whole candidate, and
+    # the 20-byte echo it must NOT disturb is the part that already works.
+    if ([string]$overlay.lead12_scope -ne 'bandwidth_probe_acknowledged_with_index_plus_one_and_little_endian_count') { throw "PACKAGE-MANIFEST Lead 12 scope mismatch: $($overlay.lead12_scope)" }
+    if (-not [bool]$overlay.lead12_twenty_byte_probes_still_verbatim_echo) { throw 'PACKAGE-MANIFEST must record that 20-byte probes stay a verbatim echo; that path already works.' }
+    if (-not [string]$overlay.lead12_validated_by_captured_bandwidth_replay) { throw 'PACKAGE-MANIFEST must record the captured-bandwidth replay validation.' }
+    if (-not [string]$overlay.lead12_capture_pkt_size_defect_fixed) { throw 'PACKAGE-MANIFEST must record the capture truncation defect that hid the bandwidth phase.' }
+    # The joiner-only stall must stay recorded as unexplained. Promoting it to
+    # a cause would be exactly the kind of co-occurrence claim the method bans.
+    if ([string]$overlay.lead12_role_asymmetry_recorded_not_explained -notmatch 'NOT explained') { throw 'PACKAGE-MANIFEST must keep the joiner-only stall recorded as unexplained.' }
     # v7 recorded the upstream figure's mechanism wrongly. The corrected entry
     # must not silently revert to the old claim.
     if ([string]$overlay.peer_qos_upstream_status -notmatch 'handed to the client') { throw 'PACKAGE-MANIFEST must keep the corrected account of where the upstream figure comes from.' }
@@ -129,8 +142,8 @@ function Assert-LocalState {
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
-    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server QoS Reply v10')) {
-        throw 'RUNTIME-TEST.md is not the Player B QoS-reply v10 package contract.'
+    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server QoS Bandwidth-Ack v11')) {
+        throw 'RUNTIME-TEST.md is not the Player B QoS-bandwidth-ack v11 package contract.'
     }
     if (-not $runtimeText.Contains($ExpectedBranch)) {
         throw "RUNTIME-TEST.md does not pin expected branch $ExpectedBranch."
@@ -147,7 +160,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B QoS-reply v10 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 11 scope=$($PackageManifest.matchmaking_overlay.lead11_scope) (retail answers EVERY 20-byte probe, type 2 and type 3 alike, with the same 30-byte reply - echo plus u32 marker, u16 senders port, u32 zero - where this relay appended a trailer only to type 2 and answered type 3 with a bare 20-byte echo, which is what stalled run 20260818-144512), Lead 10 recorded as refuted, the small-probe marker kept as an inference with a control arm, firetype wrapper and firewall declaration restored, qosip little-endian, retail response headers, QoS-config v9 and earlier inherited unchanged, and a filtered Player B wire capture on 42128." -ForegroundColor Green
+    Write-Host "PASS: portable Player B QoS-bandwidth-ack v11 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 12 scope=$($PackageManifest.matchmaking_overlay.lead12_scope) (a bandwidth reply is not a verbatim echo - retail acknowledges each probe with index+1 and a little-endian count, so the tenth reply carries index 10 equal to the count and the client finally learns the phase finished; we echoed the index unchanged so it never exceeded 9), Lead 11 recorded as the partial it was, 20-byte probes kept as the verbatim echo that already works, the capture truncation that hid the bandwidth phase fixed, and the joiner-only stall kept recorded as unexplained." -ForegroundColor Green
     exit 0
 }
 
