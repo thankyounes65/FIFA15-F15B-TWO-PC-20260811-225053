@@ -9,10 +9,10 @@ $Config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $PackageManifest=Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-WORKING-SERVER-PEER-QOS-V7'
+$Candidate='FIFA15-MM-WORKING-SERVER-QOS-PROBE-V8'
 $Package='F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 $ExpectedBranch='integration/test-matchmaking-working-server-setup-burst-v3'
-$ExpectedHostBuild='build_pairing_working_server_peer_qos_v7.rs'
+$ExpectedHostBuild='build_pairing_working_server_qos_probe_v8.rs'
 $ExpectedBaseline='8ac9f914685ddf8dc60ca95a21addb674de6716b'
 
 function Assert-LocalState {
@@ -86,6 +86,13 @@ function Assert-LocalState {
     if ([string]$overlay.peer_qos_downstream_status -notmatch 'inference') { throw 'PACKAGE-MANIFEST must record the downstream figure as an inference, not a measurement.' }
     if (-not $overlay.self_echo_still_reports_client_measured_zero) { throw 'PACKAGE-MANIFEST must record that the self echo is left alone.' }
     if (-not [string]$overlay.lead8_root_cause) { throw 'PACKAGE-MANIFEST must record the real root cause behind the zero bandwidth.' }
+    # QoS probe v8. This is the first candidate that can affect the login
+    # path, so the manifest must state what moved and why.
+    if ([string]$overlay.lead9_scope -ne 'qos_probe_protocol_bandwidth_firewall_firetype_and_udp_probes') { throw "PACKAGE-MANIFEST Lead 9 scope mismatch: $($overlay.lead9_scope)" }
+    if (-not $overlay.lead9_firewall_opens_udp_17502) { throw 'PACKAGE-MANIFEST must record that UDP 17502 is opened; without it the probes never arrive and the measurement silently never completes.' }
+    if (-not [string]$overlay.lead9_ping_site_now_routable) { throw 'PACKAGE-MANIFEST must record why the ping site moved off loopback.' }
+    if ([string]$overlay.lead9_firetype_to_natt_mapping -notmatch 'unresolved') { throw 'PACKAGE-MANIFEST must keep the firetype-to-NATT mapping recorded as unresolved.' }
+
 
 
 
@@ -103,8 +110,8 @@ function Assert-LocalState {
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
-    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server Peer QoS v7')) {
-        throw 'RUNTIME-TEST.md is not the Player B peer-QoS v7 package contract.'
+    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server QoS Probe v8')) {
+        throw 'RUNTIME-TEST.md is not the Player B QoS-probe v8 package contract.'
     }
     if (-not $runtimeText.Contains($ExpectedBranch)) {
         throw "RUNTIME-TEST.md does not pin expected branch $ExpectedBranch."
@@ -121,7 +128,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B peer-QoS v7 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 8 scope=$($PackageManifest.matchmaking_overlay.lead8_scope) (no peer is advertised at zero network capacity any more - retails canned upstream constant reproduced exactly, an observed downstream figure published as a labelled inference, and both peer documents agreeing on the NAT type), the real root cause recorded as the missing bandwidth-probe responder, relay-topology v6 and earlier inherited unchanged, and a filtered Player B wire capture on 42128." -ForegroundColor Green
+    Write-Host "PASS: portable Player B QoS-probe v8 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 9 scope=$($PackageManifest.matchmaking_overlay.lead9_scope) (the bandwidth, firewall and firetype routes Player A never answered plus a UDP probe responder, so each client finally measures its own capacity and NAT type), the ping site moved off loopback because this packages forwarder is TCP-only, UDP 17502 opened, the firetype-to-NATT mapping kept recorded as unresolved, peer-QoS v7 and earlier inherited unchanged, and a filtered Player B wire capture on 42128." -ForegroundColor Green
     exit 0
 }
 
