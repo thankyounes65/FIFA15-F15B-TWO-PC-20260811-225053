@@ -1,5 +1,5 @@
 <#
-Player B runner for the working-server setup burst v3 test.
+Player B runner for the working-server lobby entry v4 test.
 
 No Frida or other in-process instrumentation is attached to fifa15.exe. Player B
 keeps the already-proven boot/connect stack unchanged. This branch changes only
@@ -24,7 +24,7 @@ $Diagnostic = Join-Path $Root 'diagnostic-run.ps1'
 $Collect = Join-Path $Root 'COLLECT-PLAYER-B-EVIDENCE.ps1'
 $Capture = Join-Path $Root 'capture-blaze-traffic.ps1'
 $ExpectedBranch = 'integration/test-matchmaking-working-server-setup-burst-v3'
-$Candidate = 'FIFA15-MM-WORKING-SERVER-SETUP-BURST-V3'
+$Candidate = 'FIFA15-MM-WORKING-SERVER-LOBBY-ENTRY-V4'
 $Package = 'F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
@@ -96,19 +96,19 @@ if ($SelfTest) {
     )
     foreach ($token in $banned) {
         if ($source.Contains($token)) {
-            throw "Player B v3 runner reintroduced in-process instrumentation: $token"
+            throw "Player B lobby-entry v4 runner reintroduced in-process instrumentation: $token"
         }
     }
     if ($source -match "Start-Process\s+-FilePath\s+'python'") {
-        throw 'Player B v3 runner reintroduced a Python observer process.'
+        throw 'Player B lobby-entry v4 runner reintroduced a Python observer process.'
     }
-    Write-Host "PASS: Player B v3 runner pins $ExpectedBranch / $Candidate / $Package, attaches nothing to fifa15.exe, and retains the known-good boot/connect stack." -ForegroundColor Green
+    Write-Host "PASS: Player B lobby-entry v4 runner pins $ExpectedBranch / $Candidate / $Package, attaches nothing to fifa15.exe, and retains the known-good boot/connect stack." -ForegroundColor Green
     exit 0
 }
 
 New-Item -ItemType Directory -Force -Path $attempt | Out-Null
 @(
-    'FIFA15 working-server setup burst v3 - Player B',
+    'FIFA15 working-server lobby entry v4 - Player B',
     "started_utc=$((Get-Date).ToUniversalTime().ToString('o'))",
     "branch=$ExpectedBranch",
     "candidate_id=$Candidate",

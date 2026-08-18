@@ -8,10 +8,10 @@
   "host_runtime_policy": "Player A changes only Leads 1-3: full-width PID connection-group identity, mesh target resolution, and retail GSTA130 promotion/completion gate; Lead 4 remains disabled",
   "historical_source_branch": "integration/test-matchmaking-working-server-parity-v1",
   "tailscale_version": "1.102.2",
-  "candidate_id": "FIFA15-MM-WORKING-SERVER-SETUP-BURST-V3",
+  "candidate_id": "FIFA15-MM-WORKING-SERVER-LOBBY-ENTRY-V4",
   "package_attestation": "F15B-MM-WORKING-SERVER-SETUP-BURST-V3",
   "expected_host_branch": "integration/test-matchmaking-working-server-setup-burst-v3",
-  "expected_host_build": "build_pairing_working_server_setup_burst_v3.rs",
+  "expected_host_build": "build_pairing_working_server_lobby_entry_v4.rs",
   "wire_protocol_baseline_commit": "8ac9f914685ddf8dc60ca95a21addb674de6716b",
   "attestation_gate_port": 48216
 }

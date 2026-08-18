@@ -1,14 +1,14 @@
-# FIFA15 Player B Working-Server Setup Burst v3
+# FIFA15 Player B Working-Server Lobby Entry v4
 
-**Subsystem:** FUT Online Single Match matchmaking — the notification burst the real server pushes between `NotifyGameSetup` and the client's first mesh request.
+**Subsystem:** FUT Online Single Match matchmaking — the host endpoint Player B uses to open its peer-to-peer flow, plus two matchmaking notifications Player A has never sent.
 
 **Player B branch:** `integration/test-matchmaking-working-server-setup-burst-v3`
 
 **Player A required branch:** `thankyounes65/fifa15-relay-clean` / `integration/test-matchmaking-working-server-setup-burst-v3`
 
-**Player A build:** `build_pairing_working_server_setup_burst_v3.rs`
+**Player A build:** `build_pairing_working_server_lobby_entry_v4.rs`, parent `build_pairing_working_server_setup_burst_v3.rs`
 
-**Candidate/package:** `FIFA15-MM-WORKING-SERVER-SETUP-BURST-V3` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`, peer gate TCP 48216.
+**Candidate/package:** `FIFA15-MM-WORKING-SERVER-LOBBY-ENTRY-V4` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`, peer gate TCP 48216.
 
 **No instrumentation.** Nothing is attached to `fifa15.exe` on either machine. Player B remains a normal second client using the already-proven Tailscale/hosts/loopback/LSX/certificate/evidence stack. Retail `fifa15.exe` SHA-256 remains `3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB` and no game file is modified. **Player B's wire is unchanged in this candidate** — the only variable is Player A's burst.
 
@@ -27,58 +27,42 @@ The shared lobby still did not appear, which is why this run exists.
 
 ## Exact hypothesis
 
-The plaintext capture of a real successful FIFA 15 session shows four
-notifications between `NotifyGameSetup` and the client's first
-`updateMeshConnection`, back-to-back with no client traffic in between:
+**Player B is the joiner, and this candidate is aimed squarely at Player B's seat.**
+
+Run `20260818-012401` was valid and Player B's own wire capture was **lossless
+(0 holes)**, so it settles what happened. Player B received the whole burst,
+received `STAT=4` and `JoinCompleted` for **both** players, and sent
+`SetPlayerAttributes {REQ:"1"}` — Player B did reach the lobby state machine.
+Its Blaze stream then went silent for the remaining 123 seconds.
+
+Retail's joiner sends a **second** `{REQ:"2"}` 1.77 s later, and only then does
+the session move on. Player A never sending `SetPlayerAttributes` is correct —
+both retail seats agree the host never sends one.
+
+What precedes `{REQ:"2"}` in retail is the joiner **opening its peer-to-peer UDP
+flow to the host**, addressed to exactly `GAME.HNET[0].EXIP.IP:PORT`, before it
+even sends `{REQ:"1"}`. In run `20260818-012401` there was **no peer UDP at all
+during the lobby** — the first peer packet arrived 87 seconds later.
+
+The cause is a single encoding difference in the GameSetup Player B receives:
 
 ```
-HOST seat:
-S 0x0014  GameSetup, MSID = own session
-S 0x00E7  {GID}                                 <- host only
-S 0x0016  GameSetup, ONE byte different: MSID = the JOINER's
-S 0x0064  {GID, GSTA: 1}
-S 0x00C9  {DONE:1, GLID:1, REMV:[], UPDT:[]}
-C 0x001D  updateMeshConnection
-
-JOINER seat (this is Player B's role):
-S 0x0014  GameSetup, MSID = own session
-S 0x0016  GameSetup, BYTE-IDENTICAL to the above
-S 0x0064  {GID, GSTA: 1}
-S 0x00C9  {DONE:1, GLID:1, REMV:[], UPDT:[]}
-C 0x001D  updateMeshConnection
+before  GAME.HNET[0] = arm 3  { IP, PORT }
+now     GAME.HNET[0] = arm 2  { EXIP{IP,MACI,PORT}, INIP{IP,MACI,PORT}, MACI }
 ```
 
-A joiner-seat capture (`packet capture/joiner log/`) refuted the earlier
-"0x0016 carries the peer's session, to both roles" reading: in a joiner seat the
-two documents are byte-identical, and `0x00E7` is not sent at all. Player B is
-the joiner in this test, so **this is the seat those corrections affect**.
+Arm 2 is Confirmed in two retail sessions, one lossless and in our own game
+mode. Two further Confirmed additions ship with it, both **byte-identical** to
+retail:
 
-Player A v3 emits all four to **both** clients in the captured order, and also
-corrects two things in the same window: `GSTA=130` is echoed **ungated** (retail
-echoes it 260 ms before the peer edge exists), and the promotion bundle is
-**paired per player** rather than batched.
+```
+S 0x000C  NotifyMatchmakingAsyncStatus   after each StartMatchmaking ack
+C 0x0004  SetGameSettings {GID, GSET}    -> answered by Player A
+S 0x006E  {ATTR: <that GSET>, GID}       -> mirrored to BOTH seats
+```
 
-### The FUT lobby, from the same capture
-
-That server's FUT REST is plaintext, and it settles the lobby layer too:
-
-- **`POST /ut/game/fifa15/match` returns the REQUESTER's own squad** — it is
-  answered 121 ms *before* `startMatchmaking`, when no opponent exists. Player A
-  previously substituted the peer's squad; that is removed.
-- **The opponent comes from `GET /ut/game/fifa15/squad/active/user/<peer persona>`**,
-  a route Player A had never implemented and now serves.
-
-### Two further corrections, from re-checking an older audit against this capture
-
-- **`GameSessionUpdated` (`0x0073`) to the guest is corrected**, not removed:
-  the guest never calls `FinalizeGameCreation` itself, so this is its only
-  confirmed GSU path. It now carries `GID`+empty `XNNC`/`XSES` (matching the
-  capture exactly) instead of an unconfirmed shape, and a second, additional
-  trigger that could fire an extra copy is retired.
-- **`0x000B` is retired.** Zero occurrences across both captures, including
-  ~22 minutes of full retail play; no downstream consumer requires it.
-
-Player B's wire is still unchanged by all of this.
+Player B's wire, boot stack and game files are **unchanged**. The only variable
+is what Player A sends.
 
 ## Exact actions
 
@@ -93,32 +77,44 @@ Player B's wire is still unchanged by all of this.
 
 ## Primary discriminator
 
-Player A evidence must show `matchmaking_working_server_setup_burst_emitted`
-twice, once per client, with `peer_matchmaking_session_id` different from
-`own_matchmaking_session_id`, and the relay log must show per client:
+The decisive question is whether Player B now advances past `{REQ:"1"}`.
+
+Player A's scorecard must show:
 
 ```
-NotifyGameSetup (real pair …)
-Notify0x00E7 (working server setup burst, GID only)
-NotifyJoiningPlayerInitiateConnections (working server setup burst, peer MSID)
-NotifyGameStateChange (working server setup burst, GSTA=1)
-Notify0x00C9 (working server setup burst, empty game list update)
+                              20260818-012401           required now
+HNET arm 2 (IpPairAddress)    0                         4
+HNET arm 3 (bare IP)          4                         0   (must be 0)
+0x000C async status sent      0                         2   (one per client)
+lobby REQ=1 broadcasts        2                         2
+lobby REQ=2 broadcasts        0   <- the stall          >0  <- the fix working
 ```
 
-with the inherited Leads 1–3 chain still completing unchanged afterwards, and
-the scorecard showing `GSTA130 still held: 0` and `promotion batched runs: 0`.
+**Player B's own two artefacts settle the mechanism**, and they are the reason
+this package captures the wire at all:
+
+1. the gameplay UDP must start **during** the lobby, not ~87 s after it;
+2. Player B's Blaze capture must not end dead right after `{REQ:"1"}`.
+
+Decode it with
+`python scripts/blaze-capture/extract-blaze-stream.py --pcap <file> --port 42128
+--server-ip <Player A overlay ip> --outdir out` then `--outdir out --report`.
+If the capture is on a Tailscale interface it may be raw IPv4 with no Ethernet
+header; convert it first with `editcap -T rawip <in> <out>`.
 
 ## PASS / PARTIAL / CLEAN FAIL / VOID
 
 - **PASS:** both clients reach the same usable pre-match lobby.
-- **PARTIAL:** the burst is emitted correctly, Leads 1–3 still complete, and the joiner's behaviour after GameSetup changes in any observable way. Record the new boundary.
-- **CLEAN FAIL:** the burst is emitted correctly, Leads 1–3 still complete, and the joiner behaves exactly as in `20260817-064947`. That refutes the burst as the blocking difference.
+- **PARTIAL:** `REQ=2` appears and/or Player B's peer UDP now starts during the lobby, but the run still stops short of a usable shared lobby. Record the new boundary — that is real forward progress.
+- **CLEAN FAIL:** HNET is confirmed arm 2 on the wire, `0x000C` is sent twice, the whole v3 burst still scores at target, and Player B **still** sends only `{REQ:"1"}` with no peer UDP during the lobby. That refutes the HNET arm as the blocker — a genuine result, not a wasted run.
 - **VOID:** wrong A/B branch or package, failed preflight, peer-gate rejection, wrong search order, stale process, crash before GameSetup, missing evidence, or instrumentation reintroduced.
 
-**Regression signal to watch:** the burst is now the first traffic each client
-sees after GameSetup. If either client goes silent *earlier* than in
-`20260817-064947` — no `updateMeshConnection` at all — the burst itself is being
-rejected.
+**Regression signal to watch:** `HNET` is the host endpoint Player B connects
+to, and this candidate changes its encoding. If Player B now goes silent
+*earlier* than in `20260818-012401` — no `updateMeshConnection`, or no promotion
+— the arm 2 document is being rejected and the change must be reverted rather
+than iterated on. Player B's wire capture shows which frame immediately preceded
+any reset; Player A's relay log cannot.
 
 ## New in this package: the Player B wire capture
 

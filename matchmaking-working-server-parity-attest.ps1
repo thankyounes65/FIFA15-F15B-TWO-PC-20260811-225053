@@ -9,10 +9,10 @@ $Config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $PackageManifest=Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-WORKING-SERVER-SETUP-BURST-V3'
+$Candidate='FIFA15-MM-WORKING-SERVER-LOBBY-ENTRY-V4'
 $Package='F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 $ExpectedBranch='integration/test-matchmaking-working-server-setup-burst-v3'
-$ExpectedHostBuild='build_pairing_working_server_setup_burst_v3.rs'
+$ExpectedHostBuild='build_pairing_working_server_lobby_entry_v4.rs'
 $ExpectedBaseline='8ac9f914685ddf8dc60ca95a21addb674de6716b'
 
 function Assert-LocalState {
@@ -55,6 +55,15 @@ function Assert-LocalState {
     # two lifecycle corrections are declared and Player B changes no wire.
     if (-not [bool]$overlay.lead4_00c9_reproduced) { throw 'PACKAGE-MANIFEST no longer reproduces the decoded 0x00C9.' }
     if ([string]$overlay.lead4_scope -ne '4a_0016_joining_msid+4b_00e7_host_only+4b_0064_gsta1+4b_00c9') { throw "PACKAGE-MANIFEST Lead 4 scope mismatch: $($overlay.lead4_scope)" }
+    # Lobby entry v4. The HNET arm is the primary change and the one whose
+    # regression would break transport, so it is pinned explicitly rather
+    # than left to the free-text scope string.
+    if ([string]$overlay.lead5_scope -ne 'hnet_arm2_ip_pair_address+0x000c_async_status+0x006e_game_settings_mirror') { throw "PACKAGE-MANIFEST Lead 5 scope mismatch: $($overlay.lead5_scope)" }
+    if ([int]$overlay.hnet_network_address_arm -ne 2) { throw "PACKAGE-MANIFEST must declare HNET NetworkAddress arm 2, found: $($overlay.hnet_network_address_arm)" }
+    if (-not $overlay.async_status_0x000c_per_client) { throw 'PACKAGE-MANIFEST must declare the per-client 0x000C async status.' }
+    if (-not $overlay.game_settings_0x006e_mirrored_to_both) { throw 'PACKAGE-MANIFEST must declare the 0x006E game-settings mirror.' }
+    if (-not [string]$overlay.lead5_fifa_division_deliberately_not_sent) { throw 'PACKAGE-MANIFEST must record why fifaDivision is deliberately not sent.' }
+
     if ([bool]$overlay.gsta130_echo_gated_on_peer_edge) { throw 'PACKAGE-MANIFEST still gates the GSTA=130 echo; the capture shows it ungated.' }
     if ([string]$overlay.promotion_bundle_order -ne 'paired_per_player') { throw "PACKAGE-MANIFEST promotion order mismatch: $($overlay.promotion_bundle_order)" }
     # The capture is explicit that POST /match echoes the requester's own
@@ -68,8 +77,8 @@ function Assert-LocalState {
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
-    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server Setup Burst v3')) {
-        throw 'RUNTIME-TEST.md is not the Player B setup-burst v3 package contract.'
+    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server Lobby Entry v4')) {
+        throw 'RUNTIME-TEST.md is not the Player B lobby-entry v4 package contract.'
     }
     if (-not $runtimeText.Contains($ExpectedBranch)) {
         throw "RUNTIME-TEST.md does not pin expected branch $ExpectedBranch."
@@ -86,7 +95,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B setup-burst v3 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 4 scope=$($PackageManifest.matchmaking_overlay.lead4_scope), ungated GSTA=130 echo, paired promotion, the corrected FUT lobby (own squad from POST /match, opponent from squad/active/user), the corrected/retired GSU paths, the retired 0x000B send, and a filtered Player B wire capture on 42128." -ForegroundColor Green
+    Write-Host "PASS: portable Player B lobby-entry v4 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 5 scope=$($PackageManifest.matchmaking_overlay.lead5_scope) (GAME.HNET as NetworkAddress arm 2 so the joiner starts its peer flow, 0x000C after each StartMatchmaking ack, 0x0004 answered and mirrored as 0x006E), the whole setup-burst v3 window inherited unchanged, fifaDivision deliberately not fabricated for game mode 81, and a filtered Player B wire capture on 42128." -ForegroundColor Green
     exit 0
 }
 
