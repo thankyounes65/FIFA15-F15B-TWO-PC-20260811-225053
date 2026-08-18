@@ -18,11 +18,22 @@ readable program string. That is not a bad section list, it is the answer:
     .xtext    69,763,072, 33 MB of it decrypted; code only, 95% non-zero
     .bss      59,310; nothing
 
-FIFA 15 keeps NO program strings in any PE section. A packer that decrypts into
-freshly allocated memory leaves the original sections as scaffolding, which is
-exactly what those two dumps show. Naming more sections would fail a third time
-for the same reason. The strings, if they exist at all, are in memory the PE
-headers do not describe - so this walks the address space itself.
+CORRECTION, after this script's first real run: the conclusion drawn from those
+two dumps - "FIFA 15 keeps no program strings in any PE section" - is REFUTED.
+
+The strings are in a section called `.reloc a` (RVA 0x1DDB000, 15,757,312 bytes,
+read/write data), a Denuvo-renamed data section wearing the relocation table's
+name. The section dumper never found it because its list is hardcoded to
+.arch/.xtext/.pdata a/.bss. `.reloc a` is also plaintext ON DISK - verified that
+`setPlayerAttributes` sits at raw 0x867320 = VA 0x142641F20, the same address
+this scanner reported live - so the string corpus never needed a live capture at
+all. `.xtext`, the code, is the part that genuinely does: it is encrypted on disk
+and decrypts lazily as paths execute.
+
+This scanner is still the right tool for anything that only exists at runtime -
+heap state, which regions hold what, and confirming that memory matches the file
+- and it is what found `.reloc a` in the first place. Walking the address space
+does not depend on guessing a section name, which is exactly why it worked.
 
 WHAT THIS DOES
 
