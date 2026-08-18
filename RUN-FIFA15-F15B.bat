@@ -9,7 +9,7 @@ echo ====================================================================
 echo   Player B's wire is unchanged. No scenario selection.
 echo   Player A now serves the full QoS probe protocol, so this
 echo   client can finally measure its own bandwidth and NAT type.
-echo   Candidate: FIFA15-MM-WORKING-SERVER-PACING-TELEMETRY-V13
+echo   Candidate: FIFA15-MM-WORKING-SERVER-GAME-NQOS-V14
 echo ====================================================================
 echo.
 

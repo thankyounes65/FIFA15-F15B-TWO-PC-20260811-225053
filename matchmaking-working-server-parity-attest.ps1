@@ -9,10 +9,10 @@ $Config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $PackageManifest=Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-WORKING-SERVER-PACING-TELEMETRY-V13'
+$Candidate='FIFA15-MM-WORKING-SERVER-GAME-NQOS-V14'
 $Package='F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 $ExpectedBranch='integration/test-matchmaking-working-server-setup-burst-v3'
-$ExpectedHostBuild='build_pairing_working_server_pacing_measured_telemetry_v13.rs'
+$ExpectedHostBuild='build_pairing_working_server_game_nqos_v14.rs'
 $ExpectedBaseline='8ac9f914685ddf8dc60ca95a21addb674de6716b'
 
 function Assert-LocalState {
@@ -148,6 +148,14 @@ function Assert-LocalState {
     if ([string]$overlay.lead14_change_1_discriminator -notmatch 'spacing_us') { throw 'PACKAGE-MANIFEST must record the trace field that settles the pacing.' }
     if ([string]$overlay.lead14_change_2 -notmatch '3743') { throw 'PACKAGE-MANIFEST must record the telemetry flood it removes.' }
     if (-not [string]$overlay.lead14_both_telemetry_writers_moved_together) { throw 'PACKAGE-MANIFEST must record that both telemetry writers move together.' }
+    if ([string]$overlay.lead14_result -notmatch 'REFUTED') { throw 'PACKAGE-MANIFEST must record that both halves of Lead 14 were refuted.' }
+    # GAME.NQOS v15. The point of this candidate is that it does NOT depend on
+    # the client measurement, and that the self echo stays honest.
+    if ([string]$overlay.lead15_scope -ne 'game_document_no_longer_advertises_zero_network_capacity') { throw "PACKAGE-MANIFEST Lead 15 scope mismatch: $($overlay.lead15_scope)" }
+    if ([string]$overlay.lead15_does_not_depend_on_client_measurement -notmatch 'SERVER states outright') { throw 'PACKAGE-MANIFEST must record why this candidate differs from the seven before it.' }
+    if (-not [bool]$overlay.lead15_reuses_v7_capture_constants) { throw 'PACKAGE-MANIFEST must record that the two figures are v7 capture constants, not new inventions.' }
+    if ([string]$overlay.lead15_self_echo_deliberately_untouched -notmatch 'actually measured') { throw 'PACKAGE-MANIFEST must record that the self echo still reports what the client measured.' }
+    if (-not [string]$overlay.lead15_fifa_cross_reference_material_now_exhausted) { throw 'PACKAGE-MANIFEST must record the FIFA12/FIFA14 lead ledger.' }
     # v7 recorded the upstream figure's mechanism wrongly. The corrected entry
     # must not silently revert to the old claim.
     if ([string]$overlay.peer_qos_upstream_status -notmatch 'handed to the client') { throw 'PACKAGE-MANIFEST must keep the corrected account of where the upstream figure comes from.' }
@@ -166,8 +174,8 @@ function Assert-LocalState {
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
-    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server Measured Pacing + Telemetry v13')) {
-        throw 'RUNTIME-TEST.md is not the Player B pacing-telemetry v13 package contract.'
+    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server GAME.NQOS v14')) {
+        throw 'RUNTIME-TEST.md is not the Player B GAME-NQOS v14 package contract.'
     }
     if (-not $runtimeText.Contains($ExpectedBranch)) {
         throw "RUNTIME-TEST.md does not pin expected branch $ExpectedBranch."
@@ -184,7 +192,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B pacing-telemetry v13 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 14 scope=$($PackageManifest.matchmaking_overlay.lead14_scope) (the bandwidth pacing now spins on Instant instead of a tokio sleep that cannot resolve 500 us on Windows and records the real spacing_us in the trace, and telemetry is disabled with the working server own DISA 1 instead of a country filter that left 3743 reports flooding the lobby connection), Lead 13 recorded as PreAuth-refuted and pacing-VOID, and the 8-byte completion markers closed as a red herring the working server loses too." -ForegroundColor Green
+    Write-Host "PASS: portable Player B GAME-NQOS v14 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 15 scope=$($PackageManifest.matchmaking_overlay.lead15_scope) (GAME.NQOS in NotifyGameSetup advertised the game itself as having zero network capacity to both clients since the earliest pairing layer and now carries the working server own 24000000 down / 123456789 up - the last differing field in an otherwise field-identical 30-key GAME block, and the first candidate that does not depend on the clients own measurement succeeding), Lead 14 recorded as refuted on both halves, the self echo left reporting what the client actually measured, and the FIFA12/FIFA14 cross-reference material recorded as exhausted." -ForegroundColor Green
     exit 0
 }
 

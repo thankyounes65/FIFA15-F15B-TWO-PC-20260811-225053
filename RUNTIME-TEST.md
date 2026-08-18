@@ -1,4 +1,4 @@
-# FIFA15 Player B Working-Server Measured Pacing + Telemetry v13
+# FIFA15 Player B Working-Server GAME.NQOS v14
 
 **Subsystem:** two independent things on Player A's side — (a) the *pacing* of its QoS bandwidth replies, which is what a client measures downstream from, and (b) four PreAuth fields where its login reply diverges from the working server.
 
@@ -6,9 +6,9 @@
 
 **Player A required branch:** `thankyounes65/fifa15-relay-clean` / `integration/test-matchmaking-working-server-setup-burst-v3`
 
-**Player A build:** `build_pairing_working_server_pacing_measured_telemetry_v13.rs`, parent `build_pairing_working_server_qos_bandwidth_ack_v11.rs`
+**Player A build:** `build_pairing_working_server_game_nqos_v14.rs`, parent `build_pairing_working_server_qos_bandwidth_ack_v11.rs`
 
-**Candidate/package:** `FIFA15-MM-WORKING-SERVER-PACING-TELEMETRY-V13` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`, peer gate TCP 48216.
+**Candidate/package:** `FIFA15-MM-WORKING-SERVER-GAME-NQOS-V14` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`, peer gate TCP 48216.
 
 **No instrumentation.** Nothing is attached to `fifa15.exe` on either machine. Player B remains a normal second client on the already-proven Tailscale/hosts/loopback/LSX/certificate/evidence stack. Retail `fifa15.exe` SHA-256 remains `3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB` and no game file is modified. **Player B's wire is unchanged** — the only variables are Player A's reply timing and its PreAuth fields.
 
@@ -61,7 +61,7 @@ An offline diff of the working server's lobby phase shows `REQ=1` and `REQ=2` ar
 1. Player A uses the Universal Branch Tester and selects `integration/test-matchmaking-working-server-setup-burst-v3`.
 2. Player A must require `launch\VERIFY-BUILD.bat` to PASS before FIFA starts.
 3. Player B uses a FRESH ZIP of this exact branch and runs `RUN-FIFA15-F15B.bat` as Administrator.
-4. Require the peer gate to accept exact candidate/package `FIFA15-MM-WORKING-SERVER-PACING-TELEMETRY-V13` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`.
+4. Require the peer gate to accept exact candidate/package `FIFA15-MM-WORKING-SERVER-GAME-NQOS-V14` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`.
 5. Both enter FUT → Online Single Match. **A searches first, B searches second.**
 6. Do not cancel or retry after pairing.
 7. If both reach the shared lobby, B readies first, then A. Continue toward kickoff only while stable.

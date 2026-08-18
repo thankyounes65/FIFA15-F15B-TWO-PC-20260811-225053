@@ -24,7 +24,7 @@ $Diagnostic = Join-Path $Root 'diagnostic-run.ps1'
 $Collect = Join-Path $Root 'COLLECT-PLAYER-B-EVIDENCE.ps1'
 $Capture = Join-Path $Root 'capture-blaze-traffic.ps1'
 $ExpectedBranch = 'integration/test-matchmaking-working-server-setup-burst-v3'
-$Candidate = 'FIFA15-MM-WORKING-SERVER-PACING-TELEMETRY-V13'
+$Candidate = 'FIFA15-MM-WORKING-SERVER-GAME-NQOS-V14'
 $Package = 'F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
@@ -116,7 +116,7 @@ if ($SelfTest) {
     if (-not $launcherText.Contains($Candidate)) {
         throw "RUN-FIFA15-F15B.bat banner does not name the current candidate $Candidate; it will mislead the operator even though every other self-test passes."
     }
-    Write-Host "PASS: Player B pacing-telemetry v13 runner pins $ExpectedBranch / $Candidate / $Package, attaches nothing to fifa15.exe, retains the known-good boot/connect stack, and RUN-FIFA15-F15B.bat's own banner names the current candidate." -ForegroundColor Green
+    Write-Host "PASS: Player B GAME-NQOS v14 runner pins $ExpectedBranch / $Candidate / $Package, attaches nothing to fifa15.exe, retains the known-good boot/connect stack, and RUN-FIFA15-F15B.bat's own banner names the current candidate." -ForegroundColor Green
     exit 0
 }
 
