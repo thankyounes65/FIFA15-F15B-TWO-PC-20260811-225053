@@ -28,6 +28,22 @@ This script never writes to the game, never suspends it, and never loads anythin
 into it. It is still a material change from "nothing was attached", so every
 attestation that says so must be updated alongside it - see RUNTIME-TEST.md.
 
+NOTE ON SECTIONS - learned the hard way from the 20260818-153503 dump
+    This binary's layout is not the usual one, and the obvious names are wrong:
+
+        .arch     0x00001000   31,300,575 virtual   0 RAW   <- data/strings, filled at runtime
+        .rdata    0x02E7C000          209 bytes            <- a stub, not the real rdata
+        .xtext    0x02E7E000   69,763,072            <- code only, no strings
+        .pdata a  0x02CE2000    1,626,112            <- RUNTIME_FUNCTION table: function bounds
+
+    The first dump asked for `.xtext, .rdata, .data`. It returned 33 MB of genuinely
+    decrypted code and **not one readable string**, because every string lives in
+    `.arch` - which has ZERO raw size on disk and only exists once the process has
+    populated it. `.data` does not exist at all.
+
+    So the default below is `.arch` (the data), `.xtext` (the code), `.pdata a`
+    (function boundaries, which make the code far easier to carve up) and `.bss`.
+
 .PARAMETER OutDir
 Where to write the dump. Defaults to a timestamped folder under runs/.
 
@@ -41,7 +57,7 @@ Parse-and-logic check with no process access at all.
 [CmdletBinding()]
 param(
     [string]$OutDir = '',
-    [string[]]$Sections = @('.xtext', '.rdata', '.data'),
+    [string[]]$Sections = @('.arch', '.xtext', '.pdata a', '.bss'),
     [switch]$SelfTest
 )
 
@@ -179,7 +195,7 @@ try {
             if ($part) { [Array]::Copy($part, 0, $data, $off, $part.Length); $got += $part.Length }
         }
 
-        $safe = $section.Name.TrimStart('.')
+        $safe = $section.Name.TrimStart('.').Replace(' ', '_')
         $path = Join-Path $OutDir ("{0}-RVA-{1:X8}.bin" -f $safe, $section.VirtualAddress)
         [IO.File]::WriteAllBytes($path, $data)
 
