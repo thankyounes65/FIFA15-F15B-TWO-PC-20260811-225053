@@ -9,10 +9,10 @@ $Config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $PackageManifest=Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-WORKING-SERVER-QOS-PACING-PREAUTH-V12'
+$Candidate='FIFA15-MM-WORKING-SERVER-PACING-TELEMETRY-V13'
 $Package='F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 $ExpectedBranch='integration/test-matchmaking-working-server-setup-burst-v3'
-$ExpectedHostBuild='build_pairing_working_server_qos_pacing_preauth_v12.rs'
+$ExpectedHostBuild='build_pairing_working_server_pacing_measured_telemetry_v13.rs'
 $ExpectedBaseline='8ac9f914685ddf8dc60ca95a21addb674de6716b'
 
 function Assert-LocalState {
@@ -137,6 +137,17 @@ function Assert-LocalState {
     if (-not [string]$overlay.lead13_cids_and_maid_deliberately_untouched) { throw 'PACKAGE-MANIFEST must record that CIDS and MAID are deliberately out of scope.' }
     # The REQ=2 correction is load-bearing for how future runs are scored.
     if ([string]$overlay.lead13_req2_is_not_server_triggered -notmatch 'NOTHING exchanged') { throw 'PACKAGE-MANIFEST must record that REQ=2 is not server-triggered.' }
+    # Lead 13 split: PreAuth refuted, pacing VOID. Both must be recorded, and
+    # the completion-marker closure must not be quietly dropped - it is the
+    # reason a whole discriminator was retired.
+    if ([string]$overlay.lead13_result -notmatch 'VOID') { throw 'PACKAGE-MANIFEST must record that the v12 pacing was VOID, not refuted.' }
+    if ([string]$overlay.lead13_completion_marker_closed -notmatch 'RED HERRING') { throw 'PACKAGE-MANIFEST must record the completion marker as closed.' }
+    # Measured pacing + telemetry v14.
+    if ([string]$overlay.lead14_scope -ne 'accurate_measured_bandwidth_pacing_plus_telemetry_disabled') { throw "PACKAGE-MANIFEST Lead 14 scope mismatch: $($overlay.lead14_scope)" }
+    if ([string]$overlay.lead14_change_1 -notmatch 'spins on Instant') { throw 'PACKAGE-MANIFEST must record why the pacing no longer uses a tokio sleep.' }
+    if ([string]$overlay.lead14_change_1_discriminator -notmatch 'spacing_us') { throw 'PACKAGE-MANIFEST must record the trace field that settles the pacing.' }
+    if ([string]$overlay.lead14_change_2 -notmatch '3743') { throw 'PACKAGE-MANIFEST must record the telemetry flood it removes.' }
+    if (-not [string]$overlay.lead14_both_telemetry_writers_moved_together) { throw 'PACKAGE-MANIFEST must record that both telemetry writers move together.' }
     # v7 recorded the upstream figure's mechanism wrongly. The corrected entry
     # must not silently revert to the old claim.
     if ([string]$overlay.peer_qos_upstream_status -notmatch 'handed to the client') { throw 'PACKAGE-MANIFEST must keep the corrected account of where the upstream figure comes from.' }
@@ -155,8 +166,8 @@ function Assert-LocalState {
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
-    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server QoS Pacing + PreAuth v12')) {
-        throw 'RUNTIME-TEST.md is not the Player B QoS-pacing-preauth v12 package contract.'
+    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server Measured Pacing + Telemetry v13')) {
+        throw 'RUNTIME-TEST.md is not the Player B pacing-telemetry v13 package contract.'
     }
     if (-not $runtimeText.Contains($ExpectedBranch)) {
         throw "RUNTIME-TEST.md does not pin expected branch $ExpectedBranch."
@@ -173,7 +184,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B QoS-pacing-preauth v12 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 13 scope=$($PackageManifest.matchmaking_overlay.lead13_scope) (two bundled changes with non-overlapping discriminators - bandwidth replies paced to reproduce the captured 4.624 ms span so the client can measure a real downstream, and the PreAuth reply aligned on EEFA, ESRC, SVER and two missing CONF keys), Lead 12 recorded as the partial it was, the probe marker meaning now Confirmed as the client observed external address, CIDS and MAID deliberately out of scope, and REQ=2 recorded as not server-triggered." -ForegroundColor Green
+    Write-Host "PASS: portable Player B pacing-telemetry v13 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 14 scope=$($PackageManifest.matchmaking_overlay.lead14_scope) (the bandwidth pacing now spins on Instant instead of a tokio sleep that cannot resolve 500 us on Windows and records the real spacing_us in the trace, and telemetry is disabled with the working server own DISA 1 instead of a country filter that left 3743 reports flooding the lobby connection), Lead 13 recorded as PreAuth-refuted and pacing-VOID, and the 8-byte completion markers closed as a red herring the working server loses too." -ForegroundColor Green
     exit 0
 }
 
