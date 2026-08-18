@@ -9,10 +9,10 @@ $Config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $PackageManifest=Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-WORKING-SERVER-PEER-SESSION-V5'
+$Candidate='FIFA15-MM-WORKING-SERVER-RELAY-TOPOLOGY-V6'
 $Package='F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 $ExpectedBranch='integration/test-matchmaking-working-server-setup-burst-v3'
-$ExpectedHostBuild='build_pairing_working_server_peer_session_v5.rs'
+$ExpectedHostBuild='build_pairing_working_server_relay_topology_v6.rs'
 $ExpectedBaseline='8ac9f914685ddf8dc60ca95a21addb674de6716b'
 
 function Assert-LocalState {
@@ -71,6 +71,14 @@ function Assert-LocalState {
     if ([int]$overlay.peer_observed_nat_type -ne 5) { throw "PACKAGE-MANIFEST must record the observed NAT stub it replaces, found: $($overlay.peer_observed_nat_type)" }
     if (-not $overlay.peer_bandwidth_not_fabricated_from_capture) { throw 'PACKAGE-MANIFEST must record that retail bandwidth is not fabricated.' }
     if (-not [string]$overlay.lead6_hnet_hypothesis_refuted) { throw 'PACKAGE-MANIFEST must record that the v4 HNET hypothesis was refuted.' }
+    # Relay topology v6. Both halves of retail's rule must be declared:
+    # advertising the relay, and the peer INIP that makes it safe.
+    if ([string]$overlay.lead7_scope -ne 'relay_topology+peer_inip_equals_exip') { throw "PACKAGE-MANIFEST Lead 7 scope mismatch: $($overlay.lead7_scope)" }
+    if ([string]$overlay.peer_endpoint_mode -ne 'relay_11000_host_11001_guest') { throw "PACKAGE-MANIFEST must declare the relay peer endpoint mode, found: $($overlay.peer_endpoint_mode)" }
+    if (-not $overlay.peer_documents_publish_inip_equal_exip) { throw 'PACKAGE-MANIFEST must declare the peer INIP==EXIP rule, without which relay mode was already refuted once.' }
+    if (-not $overlay.recipient_own_roster_entry_keeps_private_inip) { throw 'PACKAGE-MANIFEST must declare that the recipient keeps its own private INIP.' }
+    if (-not [string]$overlay.lead7_previous_relay_attempt_refuted_because) { throw 'PACKAGE-MANIFEST must record why the earlier relay attempt was refuted.' }
+
 
 
     if ([bool]$overlay.gsta130_echo_gated_on_peer_edge) { throw 'PACKAGE-MANIFEST still gates the GSTA=130 echo; the capture shows it ungated.' }
@@ -86,8 +94,8 @@ function Assert-LocalState {
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
-    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server Peer Session v5')) {
-        throw 'RUNTIME-TEST.md is not the Player B peer-session v5 package contract.'
+    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server Relay Topology v6')) {
+        throw 'RUNTIME-TEST.md is not the Player B relay-topology v6 package contract.'
     }
     if (-not $runtimeText.Contains($ExpectedBranch)) {
         throw "RUNTIME-TEST.md does not pin expected branch $ExpectedBranch."
@@ -104,7 +112,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B peer-session v5 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 6 scope=$($PackageManifest.matchmaking_overlay.lead6_scope) (UserSessions 0x0001 sent for the PEER in the captured lean shape immediately before GameSetup, publishing the open NAT type 1 in place of the unmeasured stub 5 as a separately scored second variable), retail bandwidth deliberately not fabricated, the refuted v4 HNET hypothesis recorded, lobby-entry v4 and setup-burst v3 inherited unchanged, and a filtered Player B wire capture on 42128." -ForegroundColor Green
+    Write-Host "PASS: portable Player B relay-topology v6 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 7 scope=$($PackageManifest.matchmaking_overlay.lead7_scope) (both players advertised at Player A UDP relay on 11000/11001 as retail advertises both at the server own address, with every PEER document carrying INIP equal to EXIP so a same-NAT inference still reaches the relay, and each recipient keeping its own private INIP), the reason the earlier relay attempt was refuted recorded, peer-session v5 and earlier inherited unchanged, and a filtered Player B wire capture on 42128." -ForegroundColor Green
     exit 0
 }
 
