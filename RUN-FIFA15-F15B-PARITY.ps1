@@ -22,6 +22,8 @@ $Forwarder = Join-Path $Root 'loopback-relay-forwarder.ps1'
 $Tailscale = Join-Path $Root 'tailscale-bootstrap.ps1'
 $Diagnostic = Join-Path $Root 'diagnostic-run.ps1'
 $Collect = Join-Path $Root 'COLLECT-PLAYER-B-EVIDENCE.ps1'
+$DumpSections = Join-Path $Root 'dump-fifa15-decrypted-sections.ps1'
+$DumpOnDemand = Join-Path $Root 'dump-fifa15-when-stuck.ps1'
 $Capture = Join-Path $Root 'capture-blaze-traffic.ps1'
 $ExpectedBranch = 'integration/test-matchmaking-working-server-setup-burst-v3'
 $Candidate = 'FIFA15-MM-WORKING-SERVER-GAME-NQOS-V14'
@@ -52,6 +54,8 @@ function Assert-Files {
         'tailscale-bootstrap.ps1',
         'VERIFY-PLAYER-B-GAME-FILES.ps1',
         'COLLECT-PLAYER-B-EVIDENCE.ps1',
+        'dump-fifa15-decrypted-sections.ps1',
+        'dump-fifa15-when-stuck.ps1',
         'capture-blaze-traffic.ps1',
         'RUNTIME-TEST.md',
         'APPLIANCE-CONFIG.json',
@@ -108,6 +112,17 @@ if ($SelfTest) {
     # self-test still green, because the banner is cosmetic and gates nothing -
     # until an operator reads it and reasonably concludes the wrong candidate
     # is loaded. Checked here so that class of drift fails the self-test.
+    # The dump is READ-ONLY by construction. If it ever gains a write handle or
+    # a debugger call, that is a different thing entirely and must not pass.
+    $dumperSource = Get-Content -LiteralPath (Join-Path $Root 'dump-fifa15-decrypted-sections.ps1') -Raw
+    # Matched with a trailing '(' so this catches a declaration or a call and not
+    # the docstring's own promise that it never calls them.
+    foreach ($forbidden in @('WriteProcessMemory(','DebugActiveProcess(','CreateRemoteThread(','VirtualAllocEx(','SuspendThread(','VirtualProtectEx(')) {
+        if ($dumperSource.Contains($forbidden)) { throw "the decrypted-code dumper is no longer read-only: $forbidden" }
+    }
+    # And the access mask must stay read-only: no VM_WRITE (0x20), no VM_OPERATION (0x8).
+    if (-not $dumperSource.Contains('$PROCESS_ACCESS = 0x1010')) { throw 'the decrypted-code dumper changed its process access mask.' }
+    if (-not $source.Contains('dump_window_start')) { throw 'Player B runner no longer opens the on-demand dump window.' }
     $launcherPath = Join-Path $Root 'RUN-FIFA15-F15B.bat'
     if (-not (Test-Path -LiteralPath $launcherPath -PathType Leaf)) {
         throw "Missing Player B launcher: $launcherPath"
@@ -116,7 +131,7 @@ if ($SelfTest) {
     if (-not $launcherText.Contains($Candidate)) {
         throw "RUN-FIFA15-F15B.bat banner does not name the current candidate $Candidate; it will mislead the operator even though every other self-test passes."
     }
-    Write-Host "PASS: Player B GAME-NQOS v14 runner pins $ExpectedBranch / $Candidate / $Package, attaches nothing to fifa15.exe, retains the known-good boot/connect stack, and RUN-FIFA15-F15B.bat's own banner names the current candidate." -ForegroundColor Green
+    Write-Host "PASS: Player B GAME-NQOS v14 runner pins $ExpectedBranch / $Candidate / $Package, attaches no debugger and injects nothing into fifa15.exe - the only contact is a read-only ReadProcessMemory dump, and only if the operator presses ENTER - retains the known-good boot/connect stack, and RUN-FIFA15-F15B.bat's own banner names the current candidate." -ForegroundColor Green
     exit 0
 }
 
@@ -185,6 +200,23 @@ try {
     $stage = 'peer_gate'
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Attest)
 
+    # Decrypted-code dump, on demand. Denuvo decrypts .xtext lazily - only code
+    # that has actually run is readable - so the dump has to be taken WHILE the
+    # lobby is stuck, which is a moment only the operator can identify. This runs
+    # in its own window so the boot/connect path below is untouched and unblocked.
+    # Read-only ReadProcessMemory: no debugger, no injection, no writes.
+    $stage = 'dump_window_start'
+    $dumpWindow = $null
+    if (Test-Path -LiteralPath $DumpOnDemand -PathType Leaf) {
+        try {
+            $dumpWindow = Start-Process powershell.exe -PassThru -ArgumentList @(
+                '-NoProfile','-ExecutionPolicy','Bypass','-File',$DumpOnDemand,
+                '-OutDir',(Join-Path $attempt 'decrypted-dumps'),
+                '-Dumper',$DumpSections
+            )
+        } catch { Write-Warning "could not open the dump window: $($_.Exception.Message)" }
+    }
+
     $stage = 'fifa_runtime'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Diagnostic
     $rc = [int]$LASTEXITCODE
@@ -197,6 +229,9 @@ try {
     }
     $rc = 1
 } finally {
+    if ($dumpWindow -and -not $dumpWindow.HasExited) {
+        try { Stop-Process -Id $dumpWindow.Id -Force -ErrorAction SilentlyContinue } catch {}
+    }
     if ($captureActive) {
         try { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Capture -Stop -OutDir $attempt } catch { Write-Warning $_ }
     }
@@ -230,5 +265,6 @@ Write-Host '====================================================================
 Write-Host '  PLAYER B SETUP-BURST V3 RUN FINISHED' -ForegroundColor Cyan
 Write-Host '====================================================================' -ForegroundColor Cyan
 Write-Host "Manifest: $attempt" -ForegroundColor Green
-Write-Host 'Nothing was attached to fifa15.exe. Progress is scored from Player A relay/trace evidence.' -ForegroundColor Gray
+Write-Host 'No debugger, no injection and nothing written to fifa15.exe. If you pressed ENTER in the dump' -ForegroundColor Gray
+Write-Host 'window, its memory was READ once per press; otherwise nothing touched the game at all.' -ForegroundColor Gray
 exit $rc

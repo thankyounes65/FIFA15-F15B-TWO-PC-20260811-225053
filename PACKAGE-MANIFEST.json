@@ -22,7 +22,10 @@
     "network_log_mandatory_in_bundle": true,
     "native_attestation_log_mandatory_in_bundle": false,
     "stalker_used": false,
-    "instrumentation": "none",
+    "instrumentation": "read_only_memory_dump_on_operator_request",
+    "instrumentation_detail": "OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION|PROCESS_VM_READ) + ReadProcessMemory, only when the operator presses ENTER in the dump window. No debugger, no injection, no WriteProcessMemory, nothing loaded into the game. If the operator never presses ENTER, nothing touches fifa15.exe at all.",
+    "instrumentation_why": "Denuvo decrypts .xtext lazily, page by page, only as code executes. The 2026-08-15 dumps are decrypted for their first third and sit at entropy 8.00 past 50% because those paths had never run, and their .rdata came out empty. The lobby code is only readable while the lobby is actually stuck, which is a moment only the operator can identify.",
+
     "frida_scope": "none",
     "modifies_game_files": false,
     "self_heals_stale_helper_state": true,
