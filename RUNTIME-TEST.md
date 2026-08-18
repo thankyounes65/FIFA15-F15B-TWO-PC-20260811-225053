@@ -1,78 +1,69 @@
-# FIFA15 Player B Working-Server QoS Config v9
+# FIFA15 Player B Working-Server QoS Reply v10
 
-**Subsystem:** the `QOSS` block Player A hands out at PreAuth, which configures the client's own QoS self-measurement — the latency/bandwidth probe cycle that has to complete before matchmaking's `{REQ:"2"}` step is reachable.
+**Subsystem:** the QoS probe reply payload — the 30 bytes Player A's server sends back for every UDP probe, which the client needs before it will move on to the bandwidth phase.
 
 **Player B branch:** `integration/test-matchmaking-working-server-setup-burst-v3`
 
 **Player A required branch:** `thankyounes65/fifa15-relay-clean` / `integration/test-matchmaking-working-server-setup-burst-v3`
 
-**Player A build:** `build_pairing_working_server_qos_config_v9.rs`, parent `build_pairing_working_server_qos_probe_v8.rs`
+**Player A build:** `build_pairing_working_server_qos_reply_v10.rs`, parent `build_pairing_working_server_qos_config_v9.rs`
 
-**Candidate/package:** `FIFA15-MM-WORKING-SERVER-QOS-CONFIG-V9` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`, peer gate TCP 48216.
+**Candidate/package:** `FIFA15-MM-WORKING-SERVER-QOS-REPLY-V10` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`, peer gate TCP 48216.
 
-**No instrumentation.** Nothing is attached to `fifa15.exe` on either machine. Player B remains a normal second client using the already-proven Tailscale/hosts/loopback/LSX/certificate/evidence stack. Retail `fifa15.exe` SHA-256 remains `3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB` and no game file is modified. **Player B's wire is unchanged in this candidate** — the only variable is Player A's `QOSS` block and the QoS UDP responder's trace instrumentation (which changes no client-observable behaviour).
+**No instrumentation.** Nothing is attached to `fifa15.exe` on either machine. Player B remains a normal second client using the already-proven Tailscale/hosts/loopback/LSX/certificate/evidence stack. Retail `fifa15.exe` SHA-256 remains `3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB` and no game file is modified. **Player B's wire is unchanged in this candidate** — the only variable is the bytes Player A puts in its QoS replies.
 
 ## Already Confirmed, and not under test
 
-- Every previous wire lead through `GameSetup` and the post-`GameSetup` burst — Leads 1–7 — inherited unchanged.
-- v8's entire QoS probe protocol (bandwidth/firewall/firetype routes, the UDP responder, the routable ping site, the `prpt` echo fix) is live: run `20260818-122415` proved every one of v8's own routes and responders was reachable and correctly configured.
-- v8 was refuted on the discriminator that mattered: the client **never asked** for `qtyp=2`, `/qos/firewall`, or `/qos/firetype` — only `qtyp=1`, exactly twice per client, matching retail's count. v8's own responders for the other three routes were never exercised.
-- Legends content identity (`fifaMatchupHash`, `OSDK_rosterVersion`, `futTeamOVR`, `futNewUser`, `fifaTeamLevel`) is identical between both clients in every run so far — refuted as a cause of the stall.
+Run `20260818-144512` (v9) settled a lot, and all of it is inherited:
+
+- **Lead 10 / `QOSS` is Refuted.** `SVID: 1161889797` and `TIME: 5000` both landed on every PreAuth and the clients still never requested `qtyp=2`. Do not reopen it.
+- **Probes flow and are answered: 150 received, 150 answered, 0 capture drops.** Transport is not the problem, on either machine.
+- The latency phase completes its exact `LNP: 10` per client.
+- `qtyp=1` is requested twice per client — the same count retail issues.
+- No login regression: 2 clean logins, 0 errors, `GameSetup` fired, matchmaking paired.
+- Legends / content identity: Refuted.
 
 ## Exact hypothesis
 
-**The gate is one step earlier than v8 assumed: the `QOSS` config block the server hands out at PreAuth, not the routes that block advertises.**
+v9's per-probe counters — bundled precisely so this would be visible — showed the client **looping in the type-3 probe phase for 49 seconds**, 60–70 probes per client where retail sends 10. Retail's entire QoS sequence takes **451 ms**.
 
-The lossless retail capture (`packet capture/Fifa 15 Online Single Match Capture.zip`) shows:
+Byte comparison against the lossless capture gives retail's reply rule, which is uniform across **every** probe:
 
 ```
-retail   QOSS { ..., LNP: 10, SVID: 1161889797, TIME: 5000 }
-ours     QOSS { ..., LNP: 10, SVID: 0 }                      <- TIME absent entirely
+reply = [first 20 request bytes echoed]
+      + [u32 marker][u16 sender's port][u32 zero]
+      + zero padding out to max(30, request length)
+
+  20-byte probe (type 2 AND type 3) -> marker 0xb0ba00a7, reply 30 B
+  1200-byte bandwidth probe         -> marker 0x075bcd15, reply 1200 B
 ```
 
-Tracing this to source, not guessing: the shared `QosSettings::serialize_tagged_with_service_id`
-function never writes a `TIME` tag in **any** profile — a universal gap. `SVID`
-is **not** uniformly zero across the relay: the `Fifa15Current` profile already
-sends retail's correct `0x45410805`. The profile actually running in this
-appliance (`FIFA15_PREAUTH_PROFILE=fifa14-compat`) uses a **deliberate** `0` for
-that one profile's service id — a design choice made for an earlier,
-unrelated experiment, not an accidental omission across the relay.
+`0x075bcd15` is `123456789` — exactly the `UBPS` every captured client reports about itself. The server **hands** the client that figure and the client repeats it back. That corrects v7's account, which treated it as a constant the server invents about a peer.
 
-v9 changes exactly two things, both scoped to the smallest fix that tests this
-without touching anything else the proven baseline depends on (the CIDS list,
-`SVER` string, and everything else about the running profile are untouched):
+### Five defects fixed
 
-1. `TIME: 5000` (retail's captured value) added universally.
-2. The running profile's `SVID` changes from the deliberate `0` to retail's own
-   `0x45410805` — the same constant `Fifa15Current` already sends, extended to
-   the profile that is actually in use.
+| # | defect | exercised before? |
+| --- | --- | --- |
+| 1 | latency trailer carried a counter and payload length, not marker and port | yes |
+| 2 | **a 20-byte type-3 probe got a bare 20-byte echo, no trailer at all** | yes — **this stalls the run** |
+| 3 | `/qos/firetype` missing the XML declaration *and* the outer `<firetype>` wrapper | never |
+| 4 | `/qos/firewall` missing the XML declaration | never |
+| 5 | `qosip` big-endian; retail is little-endian | yes |
 
-**Corroboration this failure mode is real, from a sibling engine, not FIFA15
-evidence:** a FIFA14 Blaze3 private server's own PreAuth code comment (from
-`evidence/fifa15 potential evidence (1).zip`, explicitly **not** a FIFA15
-capture) records that a zero QoS service id is read by the client as "QoS
-disabled" — it never runs a probe or reports a real address. Their fix used a
-trivial non-zero value (`1`), not FIFA15's captured one; this candidate uses
-FIFA15's own retail value rather than copying theirs, since that is strictly
-stronger, game-specific evidence. See
-`docs/FIFA14-CROSS-REFERENCE-LEADS-2026-08-18.md` on the Player A side.
+Defects 3 and 4 were latent in routes written but never once requested. They were found by pre-verifying the never-exercised paths against the capture rather than waiting for a future run to expose them. Response headers now also carry `charset=utf-8` and `Cache-Control: no-store`, and the 8-byte completion marker the client sends ×10 at the end of the bandwidth phase is recorded rather than dropped (retail never replies to it, and neither do we).
 
-**Also bundled, and explicitly NOT a second variable:** per-probe UDP trace
-counters on the responder (distinguishing latency/type-2 from bandwidth/type-3
-probes actually received and answered), and UDP 17502 added to both sides'
-capture filters. Both are observation-only — they cannot change what the
-client does — so if this run's result differs from v8's, it is attributable to
-the `QOSS` change alone.
+### What is Inference, and how it is hedged
 
-Player B's wire, boot stack and game files are **unchanged**. The only variable
-is Player A's `QOSS` block and its trace instrumentation.
+The `0xb0ba00a7` marker is byte-identical across the whole captured session, so it is **not** a timestamp. Big-endian it reads `176.186.0.167` — a plausible public address — sitting directly beside a field that is unambiguously the client's port. So it most likely means "the address I see you at". That reading is an **Inference**, not Confirmed: the value is never echoed anywhere observable, and the protocol's XML uses the opposite byte order for addresses.
+
+Player A therefore implements the **rule**, and keeps retail's literal constant available as a control arm (`FIFA15_QOS_PROBE_LITERAL_MARKER=1`) that needs no rebuild. The rule is validated by a unit test that replays retail's exact captured probe and asserts our output matches retail's captured reply **byte for byte**.
 
 ## Exact actions
 
 1. Player A uses the Universal Branch Tester and selects `integration/test-matchmaking-working-server-setup-burst-v3`.
 2. Player A must require `launch\VERIFY-BUILD.bat` to PASS before FIFA starts.
 3. Player B uses a FRESH ZIP of this exact branch and runs `RUN-FIFA15-F15B.bat` as Administrator.
-4. Require the peer gate to accept exact candidate/package `FIFA15-MM-WORKING-SERVER-QOS-CONFIG-V9` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`.
+4. Require the peer gate to accept exact candidate/package `FIFA15-MM-WORKING-SERVER-QOS-REPLY-V10` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`.
 5. Both enter FUT → Online Single Match. **A searches first, B searches second.**
 6. Do not cancel or retry after pairing.
 7. If both reach the shared lobby, B readies first, then A. Continue toward kickoff only while stable.
@@ -80,43 +71,35 @@ is Player A's `QOSS` block and its trace instrumentation.
 
 ## Primary discriminator
 
-The decisive question is unchanged: does the client now request the bandwidth
-phase, or reach `{REQ:"2"}`?
-
-Player A's scorecard must show:
-
 ```
-                              20260818-122415 (v8)      required now (v9)
-QOSS.SVID sent as 0            2 (every PreAuth)         0
-QOSS.SVID sent populated       0                         2 (once per client)
-QOSS.TIME sent                 0                         2
-qtyp=1 latency requests        4 (2 per client)          4 (unchanged; already matched retail)
-qtyp=2 bandwidth requests      0   <- v8's gate           >0  <- the fix working
-UDP probes received (any)      unobservable (no filter)  now observable
-lobby REQ=2 broadcasts         0   <- the stall           >0  <- the fix working
+                                20260818-144512 (v9)   required for v10
+replies of 20 bytes              many (the defect)      0
+replies of 30 bytes              latency only           every 20-byte probe
+type-3 probes per client         60-70 (looping)        ~10 (then it moves on)
+qtyp=2 bandwidth requests        0                      >0
+/qos/firewall, /qos/firetype     0                      >0
+bandwidth completion markers     0                      10 per client
+client's own NQOS                DBPS 0 / NATT 5 / UBPS 0   non-zero
+lobby REQ=2 broadcasts           0                      >0
 ```
 
-Decode the relay log and trace with
-`python scripts/score-matchmaking-progress.py <relay-full.log> <fifa15-trace-*.jsonl>`.
+**Player B's own capture matters here**: it is the only place that shows what Player B's client actually sent and received on UDP 17502, independently of Player A's own account of what it answered.
 
 ## PASS / PARTIAL / CLEAN FAIL / VOID
 
-- **PASS:** the client requests `qtyp=2` (and ideally `/qos/firewall`/`/qos/firetype`), reports non-zero `NQOS` about itself, and both clients reach the same usable pre-match lobby.
-- **PARTIAL:** the client now requests `qtyp=2` (or later routes) but the run still stops short of a usable shared lobby. Record the new boundary — that is the first movement past v8's exact stopping point.
-- **CLEAN FAIL:** the scorecard confirms `QOSS.SVID` was sent populated and `TIME` was sent, the rest of the wire still scores at target, and the client **still** only ever requests `qtyp=1`. That refutes the QOSS-config hypothesis too, and means the gate is not in the config the server advertises — the next lead is whatever else differs in the PreAuth/login sequence before QoS, or whether the client's own UDP probes are even leaving the machine (the new capture-filter instrumentation should answer this either way).
+- **PASS:** both clients reach the same usable pre-match lobby.
+- **PARTIAL:** the QoS sequence completes — `qtyp=2`, firewall, firetype, completion markers and a non-zero `NQOS` — but `REQ=2` still does not appear. **This is a valuable outcome, not a failure:** it would be the first complete QoS measurement this appliance has produced, and it eliminates QoS as a suspect instead of leaving it merely suspected.
+- **CLEAN FAIL:** replies are confirmed 30 bytes and correctly shaped, and the client **still** loops in the type-3 phase. That means the marker's value matters and our reading of it is wrong; the immediate next step is the control arm, which needs no new build.
 - **VOID:** wrong A/B branch or package, failed preflight, peer-gate rejection, wrong search order, stale process, crash before GameSetup, missing evidence, or instrumentation reintroduced.
 
-**Regression signal to watch:** this candidate touches the PreAuth reply, sent
-to every client on every connection before login even completes. If a client
-fails to connect at all, or disconnects during PreAuth/login where it
-previously reached matchmaking cleanly, the `QOSS` change must be reverted
-rather than iterated on — this is now the second candidate in a row to touch
-login-adjacent code.
+**Regression signal to watch:** this changes bytes on a path both clients already exercise successfully today — the latency reply — and changes `qosip` on the reply that precedes every probe. If probes stop arriving altogether, or a client stops requesting `qtyp=1`, something that previously worked has broken and the change must be reverted rather than iterated on.
+
+**Honest framing.** QoS is a **login-time** subsystem: retail runs it once, at t≈59 s, and matchmaking is ~200 s later. Our client already abandons QoS and proceeds into matchmaking anyway. So this candidate fixes five Confirmed byte-level defects and should produce a real `NQOS` for the first time — but whether that is what `REQ=2` was waiting on is the experiment, **not** the prediction.
 
 ## Required evidence
 
-Player A: exact run manifest, `relay-full.log`, newest `fifa15-trace-*.jsonl`, scorecard, gameplay UDP summary (now including UDP 17502) and crash summary if applicable.
+Player A: exact run manifest, `relay-full.log`, newest `fifa15-trace-*.jsonl`, scorecard, gameplay UDP summary (includes UDP 17502) and crash summary if applicable.
 
-Player B: automatic evidence ZIP plus exact attempt manifest, including the wire capture (now including UDP 17502) and its summary. Preserve any crash/WER evidence.
+Player B: automatic evidence ZIP plus exact attempt manifest, including the wire capture (includes UDP 17502) and its summary. Preserve any crash/WER evidence. If the summary reports pktmon drops, absence of a frame proves nothing.
 
 Do not exercise `USID` semantics, alternate GSU timing, consumables, club items, Legends, tournaments, another matchmaking scenario, or native instrumentation in this launch.

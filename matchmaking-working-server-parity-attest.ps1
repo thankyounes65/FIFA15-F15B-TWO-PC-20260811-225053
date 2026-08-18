@@ -9,10 +9,10 @@ $Config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $PackageManifest=Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-WORKING-SERVER-QOS-CONFIG-V9'
+$Candidate='FIFA15-MM-WORKING-SERVER-QOS-REPLY-V10'
 $Package='F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 $ExpectedBranch='integration/test-matchmaking-working-server-setup-burst-v3'
-$ExpectedHostBuild='build_pairing_working_server_qos_config_v9.rs'
+$ExpectedHostBuild='build_pairing_working_server_qos_reply_v10.rs'
 $ExpectedBaseline='8ac9f914685ddf8dc60ca95a21addb674de6716b'
 
 function Assert-LocalState {
@@ -100,6 +100,20 @@ function Assert-LocalState {
     if ([int]$overlay.lead10_svid_value -ne 1161889797) { throw "PACKAGE-MANIFEST must declare retail's QOSS.SVID value, found: $($overlay.lead10_svid_value)" }
     if (-not $overlay.lead10_svid_fix_scoped_to_running_profile_only) { throw 'PACKAGE-MANIFEST must record that the SVID fix is scoped to the profile that actually runs, not a blanket change.' }
     if (-not [string]$overlay.lead10_corroboration) { throw 'PACKAGE-MANIFEST must record the FIFA14 cross-reference corroboration, distinct from FIFA15 evidence.' }
+    # Lead 10 was refuted. Recording it as still-open would be false provenance,
+    # and it is exactly the kind of drift that makes a scorecard unreadable.
+    if ([string]$overlay.lead10_result -notmatch 'REFUTED') { throw 'PACKAGE-MANIFEST must record that Lead 10 was refuted by run 20260818-144512.' }
+    # QoS reply v11. The blocking defect is the reply SHAPE, so the manifest
+    # must name it, and must keep the marker's meaning recorded as an inference
+    # rather than promoting it to a fact the capture does not support.
+    if ([string]$overlay.lead11_scope -ne 'qos_probe_reply_shape_for_every_probe+firetype_wrapper+firewall_declaration+little_endian_qosip+retail_headers') { throw "PACKAGE-MANIFEST Lead 11 scope mismatch: $($overlay.lead11_scope)" }
+    if (-not [string]$overlay.lead11_defect_2_type_three_probe_got_bare_echo) { throw 'PACKAGE-MANIFEST must name the bare-echo defect that actually stalled the run.' }
+    if ([string]$overlay.lead11_small_probe_marker_status -notmatch 'inference') { throw 'PACKAGE-MANIFEST must keep the small-probe marker recorded as an inference, not a confirmed address.' }
+    if (-not [string]$overlay.lead11_validated_by_byte_for_byte_replay) { throw 'PACKAGE-MANIFEST must record that the reply rule is validated against the captured bytes.' }
+    if (-not [bool]$overlay.lead11_every_qos_message_now_byte_verified) { throw 'PACKAGE-MANIFEST must record that every QoS message is byte-verified against the capture.' }
+    # v7 recorded the upstream figure's mechanism wrongly. The corrected entry
+    # must not silently revert to the old claim.
+    if ([string]$overlay.peer_qos_upstream_status -notmatch 'handed to the client') { throw 'PACKAGE-MANIFEST must keep the corrected account of where the upstream figure comes from.' }
 
 
     if ([bool]$overlay.gsta130_echo_gated_on_peer_edge) { throw 'PACKAGE-MANIFEST still gates the GSTA=130 echo; the capture shows it ungated.' }
@@ -115,8 +129,8 @@ function Assert-LocalState {
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
-    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server QoS Config v9')) {
-        throw 'RUNTIME-TEST.md is not the Player B QoS-config v9 package contract.'
+    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server QoS Reply v10')) {
+        throw 'RUNTIME-TEST.md is not the Player B QoS-reply v10 package contract.'
     }
     if (-not $runtimeText.Contains($ExpectedBranch)) {
         throw "RUNTIME-TEST.md does not pin expected branch $ExpectedBranch."
@@ -133,7 +147,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B QoS-config v9 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 10 scope=$($PackageManifest.matchmaking_overlay.lead10_scope) (QOSS.TIME added universally at 5000, and the fifa14-compat profile's QOSS.SVID moved off a deliberate 0 to retail's own 1161889797, scoped to the profile that actually runs), per-probe UDP trace counters added, gameplay UDP capture filters now include 17502, QoS-probe v8 and earlier inherited unchanged, and a filtered Player B wire capture on 42128." -ForegroundColor Green
+    Write-Host "PASS: portable Player B QoS-reply v10 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 11 scope=$($PackageManifest.matchmaking_overlay.lead11_scope) (retail answers EVERY 20-byte probe, type 2 and type 3 alike, with the same 30-byte reply - echo plus u32 marker, u16 senders port, u32 zero - where this relay appended a trailer only to type 2 and answered type 3 with a bare 20-byte echo, which is what stalled run 20260818-144512), Lead 10 recorded as refuted, the small-probe marker kept as an inference with a control arm, firetype wrapper and firewall declaration restored, qosip little-endian, retail response headers, QoS-config v9 and earlier inherited unchanged, and a filtered Player B wire capture on 42128." -ForegroundColor Green
     exit 0
 }
 
