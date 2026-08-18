@@ -9,10 +9,10 @@ $Config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $PackageManifest=Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-WORKING-SERVER-QOS-BW-ACK-V11'
+$Candidate='FIFA15-MM-WORKING-SERVER-QOS-PACING-PREAUTH-V12'
 $Package='F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 $ExpectedBranch='integration/test-matchmaking-working-server-setup-burst-v3'
-$ExpectedHostBuild='build_pairing_working_server_qos_bandwidth_ack_v11.rs'
+$ExpectedHostBuild='build_pairing_working_server_qos_pacing_preauth_v12.rs'
 $ExpectedBaseline='8ac9f914685ddf8dc60ca95a21addb674de6716b'
 
 function Assert-LocalState {
@@ -124,6 +124,19 @@ function Assert-LocalState {
     # The joiner-only stall must stay recorded as unexplained. Promoting it to
     # a cause would be exactly the kind of co-occurrence claim the method bans.
     if ([string]$overlay.lead12_role_asymmetry_recorded_not_explained -notmatch 'NOT explained') { throw 'PACKAGE-MANIFEST must keep the joiner-only stall recorded as unexplained.' }
+    # Lead 12 was a PARTIAL and the marker's meaning graduated from Inference
+    # to Confirmed. Both must be recorded or the provenance drifts.
+    if ([string]$overlay.lead12_result -notmatch 'PARTIAL') { throw 'PACKAGE-MANIFEST must record Lead 12 as the partial it was.' }
+    if ([string]$overlay.lead12_marker_meaning_now_confirmed -notmatch 'Confirmed') { throw 'PACKAGE-MANIFEST must record that the probe marker meaning is now Confirmed.' }
+    # QoS pacing + PreAuth v13. Two bundled changes; the manifest must name
+    # both discriminators, keep the spacing an inference, and keep CIDS/MAID
+    # explicitly out of scope.
+    if ([string]$overlay.lead13_scope -ne 'bandwidth_reply_pacing_plus_preauth_field_alignment') { throw "PACKAGE-MANIFEST Lead 13 scope mismatch: $($overlay.lead13_scope)" }
+    if (-not [bool]$overlay.lead13_bundled_because_discriminators_cannot_be_confused) { throw 'PACKAGE-MANIFEST must record why two changes were bundled.' }
+    if ([string]$overlay.lead13_change_a_spacing_is_inference_and_tunable -notmatch 'control arm') { throw 'PACKAGE-MANIFEST must keep the reply spacing an inference with a control arm.' }
+    if (-not [string]$overlay.lead13_cids_and_maid_deliberately_untouched) { throw 'PACKAGE-MANIFEST must record that CIDS and MAID are deliberately out of scope.' }
+    # The REQ=2 correction is load-bearing for how future runs are scored.
+    if ([string]$overlay.lead13_req2_is_not_server_triggered -notmatch 'NOTHING exchanged') { throw 'PACKAGE-MANIFEST must record that REQ=2 is not server-triggered.' }
     # v7 recorded the upstream figure's mechanism wrongly. The corrected entry
     # must not silently revert to the old claim.
     if ([string]$overlay.peer_qos_upstream_status -notmatch 'handed to the client') { throw 'PACKAGE-MANIFEST must keep the corrected account of where the upstream figure comes from.' }
@@ -142,8 +155,8 @@ function Assert-LocalState {
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
-    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server QoS Bandwidth-Ack v11')) {
-        throw 'RUNTIME-TEST.md is not the Player B QoS-bandwidth-ack v11 package contract.'
+    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server QoS Pacing + PreAuth v12')) {
+        throw 'RUNTIME-TEST.md is not the Player B QoS-pacing-preauth v12 package contract.'
     }
     if (-not $runtimeText.Contains($ExpectedBranch)) {
         throw "RUNTIME-TEST.md does not pin expected branch $ExpectedBranch."
@@ -160,7 +173,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B QoS-bandwidth-ack v11 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 12 scope=$($PackageManifest.matchmaking_overlay.lead12_scope) (a bandwidth reply is not a verbatim echo - retail acknowledges each probe with index+1 and a little-endian count, so the tenth reply carries index 10 equal to the count and the client finally learns the phase finished; we echoed the index unchanged so it never exceeded 9), Lead 11 recorded as the partial it was, 20-byte probes kept as the verbatim echo that already works, the capture truncation that hid the bandwidth phase fixed, and the joiner-only stall kept recorded as unexplained." -ForegroundColor Green
+    Write-Host "PASS: portable Player B QoS-pacing-preauth v12 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 13 scope=$($PackageManifest.matchmaking_overlay.lead13_scope) (two bundled changes with non-overlapping discriminators - bandwidth replies paced to reproduce the captured 4.624 ms span so the client can measure a real downstream, and the PreAuth reply aligned on EEFA, ESRC, SVER and two missing CONF keys), Lead 12 recorded as the partial it was, the probe marker meaning now Confirmed as the client observed external address, CIDS and MAID deliberately out of scope, and REQ=2 recorded as not server-triggered." -ForegroundColor Green
     exit 0
 }
 
