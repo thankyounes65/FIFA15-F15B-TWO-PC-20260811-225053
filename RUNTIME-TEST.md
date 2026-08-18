@@ -1,4 +1,4 @@
-# FIFA15 Player B Working-Server Relay Topology v6
+# FIFA15 Player B Working-Server Peer QoS v7
 
 **Subsystem:** FUT Online Single Match matchmaking — the notification that tells Player B its opponent's network data is current, which the real server sends 8 ms before GameSetup and Player A never has.
 
@@ -6,9 +6,9 @@
 
 **Player A required branch:** `thankyounes65/fifa15-relay-clean` / `integration/test-matchmaking-working-server-setup-burst-v3`
 
-**Player A build:** `build_pairing_working_server_relay_topology_v6.rs`, parent `build_pairing_working_server_lobby_entry_v4.rs`
+**Player A build:** `build_pairing_working_server_peer_qos_v7.rs`, parent `build_pairing_working_server_lobby_entry_v4.rs`
 
-**Candidate/package:** `FIFA15-MM-WORKING-SERVER-RELAY-TOPOLOGY-V6` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`, peer gate TCP 48216.
+**Candidate/package:** `FIFA15-MM-WORKING-SERVER-PEER-QOS-V7` / `F15B-MM-WORKING-SERVER-SETUP-BURST-V3`, peer gate TCP 48216.
 
 **No instrumentation.** Nothing is attached to `fifa15.exe` on either machine. Player B remains a normal second client using the already-proven Tailscale/hosts/loopback/LSX/certificate/evidence stack. Retail `fifa15.exe` SHA-256 remains `3DA97D0A568475E5714E06F4871B814842A705DDC62207C2B9B66B5FC085BFFB` and no game file is modified. **Player B's wire is unchanged in this candidate** — the only variable is Player A's burst.
 

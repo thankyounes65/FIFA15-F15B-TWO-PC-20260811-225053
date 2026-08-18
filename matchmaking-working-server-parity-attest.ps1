@@ -9,10 +9,10 @@ $Config=Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $PackageManifest=Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json
 $HostIp=[string]$Config.host_ip
 $Port=48216
-$Candidate='FIFA15-MM-WORKING-SERVER-RELAY-TOPOLOGY-V6'
+$Candidate='FIFA15-MM-WORKING-SERVER-PEER-QOS-V7'
 $Package='F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 $ExpectedBranch='integration/test-matchmaking-working-server-setup-burst-v3'
-$ExpectedHostBuild='build_pairing_working_server_relay_topology_v6.rs'
+$ExpectedHostBuild='build_pairing_working_server_peer_qos_v7.rs'
 $ExpectedBaseline='8ac9f914685ddf8dc60ca95a21addb674de6716b'
 
 function Assert-LocalState {
@@ -78,6 +78,15 @@ function Assert-LocalState {
     if (-not $overlay.peer_documents_publish_inip_equal_exip) { throw 'PACKAGE-MANIFEST must declare the peer INIP==EXIP rule, without which relay mode was already refuted once.' }
     if (-not $overlay.recipient_own_roster_entry_keeps_private_inip) { throw 'PACKAGE-MANIFEST must declare that the recipient keeps its own private INIP.' }
     if (-not [string]$overlay.lead7_previous_relay_attempt_refuted_because) { throw 'PACKAGE-MANIFEST must record why the earlier relay attempt was refuted.' }
+    # Peer QoS v7. The two figures have unequal evidence and the manifest
+    # must say so, so a later reader cannot mistake the inference for a fact.
+    if ([string]$overlay.lead8_scope -ne 'peer_qos_populated_no_zero_bandwidth_advertisement') { throw "PACKAGE-MANIFEST Lead 8 scope mismatch: $($overlay.lead8_scope)" }
+    if ([int]$overlay.peer_qos_upstream_bps -ne 123456789) { throw "PACKAGE-MANIFEST must declare retail's canned upstream constant, found: $($overlay.peer_qos_upstream_bps)" }
+    if ([int]$overlay.peer_qos_downstream_bps -le 0) { throw 'PACKAGE-MANIFEST must declare a non-zero published downstream figure.' }
+    if ([string]$overlay.peer_qos_downstream_status -notmatch 'inference') { throw 'PACKAGE-MANIFEST must record the downstream figure as an inference, not a measurement.' }
+    if (-not $overlay.self_echo_still_reports_client_measured_zero) { throw 'PACKAGE-MANIFEST must record that the self echo is left alone.' }
+    if (-not [string]$overlay.lead8_root_cause) { throw 'PACKAGE-MANIFEST must record the real root cause behind the zero bandwidth.' }
+
 
 
 
@@ -94,8 +103,8 @@ function Assert-LocalState {
     if ([bool]$overlay.changes_matchmaking_wire_protocol) { throw 'Player B package must not change matchmaking wire protocol.' }
 
     $runtimeText=Get-Content -LiteralPath (Join-Path $Root 'RUNTIME-TEST.md') -Raw
-    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server Relay Topology v6')) {
-        throw 'RUNTIME-TEST.md is not the Player B relay-topology v6 package contract.'
+    if (-not $runtimeText.Contains('# FIFA15 Player B Working-Server Peer QoS v7')) {
+        throw 'RUNTIME-TEST.md is not the Player B peer-QoS v7 package contract.'
     }
     if (-not $runtimeText.Contains($ExpectedBranch)) {
         throw "RUNTIME-TEST.md does not pin expected branch $ExpectedBranch."
@@ -112,7 +121,7 @@ function Assert-LocalState {
 
 Assert-LocalState
 if($SelfTest){
-    Write-Host "PASS: portable Player B relay-topology v6 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 7 scope=$($PackageManifest.matchmaking_overlay.lead7_scope) (both players advertised at Player A UDP relay on 11000/11001 as retail advertises both at the server own address, with every PEER document carrying INIP equal to EXIP so a same-NAT inference still reaches the relay, and each recipient keeping its own private INIP), the reason the earlier relay attempt was refuted recorded, peer-session v5 and earlier inherited unchanged, and a filtered Player B wire capture on 42128." -ForegroundColor Green
+    Write-Host "PASS: portable Player B peer-QoS v7 attestation pins package=$Package, host=$HostIp`:$Port, A=$ExpectedBranch/$ExpectedHostBuild, parity baseline=$ExpectedBaseline, Lead 8 scope=$($PackageManifest.matchmaking_overlay.lead8_scope) (no peer is advertised at zero network capacity any more - retails canned upstream constant reproduced exactly, an observed downstream figure published as a labelled inference, and both peer documents agreeing on the NAT type), the real root cause recorded as the missing bandwidth-probe responder, relay-topology v6 and earlier inherited unchanged, and a filtered Player B wire capture on 42128." -ForegroundColor Green
     exit 0
 }
 

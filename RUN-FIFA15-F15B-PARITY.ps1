@@ -1,5 +1,5 @@
 <#
-Player B runner for the working-server relay topology v6 test.
+Player B runner for the working-server peer QoS v7 test.
 
 No Frida or other in-process instrumentation is attached to fifa15.exe. Player B
 keeps the already-proven boot/connect stack unchanged. This branch changes only
@@ -24,7 +24,7 @@ $Diagnostic = Join-Path $Root 'diagnostic-run.ps1'
 $Collect = Join-Path $Root 'COLLECT-PLAYER-B-EVIDENCE.ps1'
 $Capture = Join-Path $Root 'capture-blaze-traffic.ps1'
 $ExpectedBranch = 'integration/test-matchmaking-working-server-setup-burst-v3'
-$Candidate = 'FIFA15-MM-WORKING-SERVER-RELAY-TOPOLOGY-V6'
+$Candidate = 'FIFA15-MM-WORKING-SERVER-PEER-QOS-V7'
 $Package = 'F15B-MM-WORKING-SERVER-SETUP-BURST-V3'
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
@@ -96,11 +96,11 @@ if ($SelfTest) {
     )
     foreach ($token in $banned) {
         if ($source.Contains($token)) {
-            throw "Player B relay-topology v6 runner reintroduced in-process instrumentation: $token"
+            throw "Player B peer-QoS v7 runner reintroduced in-process instrumentation: $token"
         }
     }
     if ($source -match "Start-Process\s+-FilePath\s+'python'") {
-        throw 'Player B relay-topology v6 runner reintroduced a Python observer process.'
+        throw 'Player B peer-QoS v7 runner reintroduced a Python observer process.'
     }
     # RUN-FIFA15-F15B.bat prints its own hardcoded candidate banner before this
     # script ever runs, and nothing previously checked it against $Candidate.
@@ -116,13 +116,13 @@ if ($SelfTest) {
     if (-not $launcherText.Contains($Candidate)) {
         throw "RUN-FIFA15-F15B.bat banner does not name the current candidate $Candidate; it will mislead the operator even though every other self-test passes."
     }
-    Write-Host "PASS: Player B relay-topology v6 runner pins $ExpectedBranch / $Candidate / $Package, attaches nothing to fifa15.exe, retains the known-good boot/connect stack, and RUN-FIFA15-F15B.bat's own banner names the current candidate." -ForegroundColor Green
+    Write-Host "PASS: Player B peer-QoS v7 runner pins $ExpectedBranch / $Candidate / $Package, attaches nothing to fifa15.exe, retains the known-good boot/connect stack, and RUN-FIFA15-F15B.bat's own banner names the current candidate." -ForegroundColor Green
     exit 0
 }
 
 New-Item -ItemType Directory -Force -Path $attempt | Out-Null
 @(
-    'FIFA15 working-server relay topology v6 - Player B',
+    'FIFA15 working-server peer QoS v7 - Player B',
     "started_utc=$((Get-Date).ToUniversalTime().ToString('o'))",
     "branch=$ExpectedBranch",
     "candidate_id=$Candidate",
