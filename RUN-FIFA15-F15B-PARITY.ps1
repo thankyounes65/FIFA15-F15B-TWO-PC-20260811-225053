@@ -24,6 +24,7 @@ $Diagnostic = Join-Path $Root 'diagnostic-run.ps1'
 $Collect = Join-Path $Root 'COLLECT-PLAYER-B-EVIDENCE.ps1'
 $DumpSections = Join-Path $Root 'dump-fifa15-decrypted-sections.ps1'
 $DumpOnDemand = Join-Path $Root 'dump-fifa15-when-stuck.ps1'
+$MemScanner = Join-Path $Root 'scan-fifa15-live-memory.ps1'
 $Capture = Join-Path $Root 'capture-blaze-traffic.ps1'
 $ExpectedBranch = 'integration/test-matchmaking-working-server-setup-burst-v3'
 $Candidate = 'FIFA15-MM-WORKING-SERVER-GAME-NQOS-V14'
@@ -114,14 +115,31 @@ if ($SelfTest) {
     # is loaded. Checked here so that class of drift fails the self-test.
     # The dump is READ-ONLY by construction. If it ever gains a write handle or
     # a debugger call, that is a different thing entirely and must not pass.
-    $dumperSource = Get-Content -LiteralPath (Join-Path $Root 'dump-fifa15-decrypted-sections.ps1') -Raw
-    # Matched with a trailing '(' so this catches a declaration or a call and not
-    # the docstring's own promise that it never calls them.
-    foreach ($forbidden in @('WriteProcessMemory(','DebugActiveProcess(','CreateRemoteThread(','VirtualAllocEx(','SuspendThread(','VirtualProtectEx(')) {
-        if ($dumperSource.Contains($forbidden)) { throw "the decrypted-code dumper is no longer read-only: $forbidden" }
+    # Both capture tools are guarded identically: the section dumper AND the
+    # address-space scanner. The scanner reads far more of the process, so if
+    # anything is going to be held to the read-only promise it is that one.
+    foreach ($tool in @('dump-fifa15-decrypted-sections.ps1', 'scan-fifa15-live-memory.ps1')) {
+        $toolPath = Join-Path $Root $tool
+        if (-not (Test-Path -LiteralPath $toolPath -PathType Leaf)) {
+            throw "Missing read-only capture tool: $toolPath"
+        }
+        $toolSource = Get-Content -LiteralPath $toolPath -Raw
+        # Matched with a trailing '(' so this catches a declaration or a call and not
+        # the docstring's own promise that it never calls them.
+        foreach ($forbidden in @('WriteProcessMemory(','DebugActiveProcess(','CreateRemoteThread(','VirtualAllocEx(','SuspendThread(','VirtualProtectEx(')) {
+            if ($toolSource.Contains($forbidden)) { throw "${tool} is no longer read-only: $forbidden" }
+        }
+        # And the access mask must stay read-only: no VM_WRITE (0x20), no VM_OPERATION (0x8).
+        if (-not $toolSource.Contains('$PROCESS_ACCESS = 0x1010')) { throw "${tool} changed its process access mask." }
     }
-    # And the access mask must stay read-only: no VM_WRITE (0x20), no VM_OPERATION (0x8).
-    if (-not $dumperSource.Contains('$PROCESS_ACCESS = 0x1010')) { throw 'the decrypted-code dumper changed its process access mask.' }
+    # The capture window must actually drive both, or a run produces the section
+    # dump alone - which is the capture we already know finds no strings.
+    $captureSource = Get-Content -LiteralPath (Join-Path $Root 'dump-fifa15-when-stuck.ps1') -Raw
+    if (-not $captureSource.Contains('scan-fifa15-live-memory.ps1')) {
+        throw 'the on-demand capture window no longer runs the address-space scanner; a run would repeat the section-only dump that twice found zero strings.'
+    }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'dump-fifa15-when-stuck.ps1') -SelfTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the on-demand capture window failed its own self-test' }
     if (-not $source.Contains('dump_window_start')) { throw 'Player B runner no longer opens the on-demand dump window.' }
     $launcherPath = Join-Path $Root 'RUN-FIFA15-F15B.bat'
     if (-not (Test-Path -LiteralPath $launcherPath -PathType Leaf)) {
@@ -131,7 +149,7 @@ if ($SelfTest) {
     if (-not $launcherText.Contains($Candidate)) {
         throw "RUN-FIFA15-F15B.bat banner does not name the current candidate $Candidate; it will mislead the operator even though every other self-test passes."
     }
-    Write-Host "PASS: Player B GAME-NQOS v14 runner pins $ExpectedBranch / $Candidate / $Package, attaches no debugger and injects nothing into fifa15.exe - the only contact is a read-only ReadProcessMemory dump, and only if the operator presses ENTER - retains the known-good boot/connect stack, and RUN-FIFA15-F15B.bat's own banner names the current candidate." -ForegroundColor Green
+    Write-Host "PASS: Player B GAME-NQOS v14 runner pins $ExpectedBranch / $Candidate / $Package, attaches no debugger and injects nothing into fifa15.exe - the only contact is a read-only ReadProcessMemory capture - the decrypted sections and a walk of the address space - and only if the operator presses ENTER - retains the known-good boot/connect stack, and RUN-FIFA15-F15B.bat's own banner names the current candidate." -ForegroundColor Green
     exit 0
 }
 
@@ -144,7 +162,7 @@ New-Item -ItemType Directory -Force -Path $attempt | Out-Null
     "package_attestation=$Package",
     'package_mode=portable-extracted-folder',
     'requires_git_checkout=false',
-    'native_instrumentation=none',
+    'native_instrumentation=read_only_memory_dump_on_operator_request',
     'frida_used=false',
     'wire_change=true_on_player_a_only',
     'player_a_wire_scope=post_gamesetup_burst_00e7_0016_peer_msid_0064_gsta1_00c9+ungated_gsta130_echo+paired_promotion',
@@ -212,7 +230,8 @@ try {
             $dumpWindow = Start-Process powershell.exe -PassThru -ArgumentList @(
                 '-NoProfile','-ExecutionPolicy','Bypass','-File',$DumpOnDemand,
                 '-OutDir',(Join-Path $attempt 'decrypted-dumps'),
-                '-Dumper',$DumpSections
+                '-Dumper',$DumpSections,
+                '-Scanner',$MemScanner
             )
         } catch { Write-Warning "could not open the dump window: $($_.Exception.Message)" }
     }
