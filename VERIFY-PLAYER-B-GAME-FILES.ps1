@@ -69,10 +69,14 @@ function Invoke-SelfTest {
     if ($sys.sha256 -ne 'B477BACB277F43A9C93C4E4D8B47E1F0F8B6B2E9751A218448B8D1B17A5DCF87') {
         throw 'Player B sysdllzf.dll contract no longer pins the successful logging-disabled hash.'
     }
+    $dbdata = @($contract.game_files | Where-Object { $_.relative_path -eq 'dbdata.dll' })[0]
+    if ($dbdata.policy -ne 'preserve_exact_current_baseline') {
+        throw 'dbdata.dll must remain baseline-preservation evidence, not a hard boot requirement, unless runtime evidence explicitly proves otherwise.'
+    }
     if (Test-FifaGameDir 'Q:\FIFA15-PRESERVATION-NONEXISTENT-DRIVE-PROBE') {
         throw 'Absent-drive probe unexpectedly resolved a FIFA installation.'
     }
-    Write-Host 'PASS: Player B known-good file contract parses, critical exact-baseline entries are present, and absent drive letters are skipped safely.' -ForegroundColor Green
+    Write-Host 'PASS: Player B known-good contract parses; hard boot requirements remain pinned; dbdata.dll remains baseline-only; unreadable baseline files are handled by policy instead of aborting the audit.' -ForegroundColor Green
 }
 
 if ($SelfTest) {
@@ -126,8 +130,27 @@ foreach ($entry in @($contract.game_files)) {
         continue
     }
 
-    $item = Get-Item -LiteralPath $path
-    $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToUpperInvariant()
+    $item = $null
+    $actualHash = $null
+    try {
+        $item = Get-Item -LiteralPath $path
+        $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToUpperInvariant()
+    } catch {
+        $reason = $_.Exception.Message -replace '[\r\n]+',' '
+        if ($isHard) {
+            Write-Host "FAIL    $relative  UNREADABLE: $reason" -ForegroundColor Red
+            $hardFailures++
+        } elseif ($isBaseline) {
+            Write-Host "WARN    $relative  UNREADABLE baseline-only file: $reason" -ForegroundColor Yellow
+            Write-Host '        Exact-baseline hash could not be re-proven; this file is not a contract hard boot requirement.' -ForegroundColor DarkYellow
+            $baselineWarnings++
+        } else {
+            Write-Host "INFO    $relative  UNREADABLE reference/provenance file: $reason" -ForegroundColor DarkGray
+            if ($isProvenanceOnly) { $provenanceWarnings++ }
+        }
+        continue
+    }
+
     $hashOk = $actualHash -eq $expectedHash
     $sizeOk = $true
     if ($null -ne $expectedBytes) { $sizeOk = [int64]$item.Length -eq $expectedBytes }
@@ -171,6 +194,6 @@ if ($Strict -and ($baselineWarnings -gt 0 -or $provenanceWarnings -gt 0)) {
 }
 Write-Host 'RESULT: required Player B boot files match the recorded known-good contract.' -ForegroundColor Green
 if ($baselineWarnings -gt 0 -or $provenanceWarnings -gt 0) {
-    Write-Host 'Use -Strict when you want the audit to fail on exact-baseline/provenance differences too.' -ForegroundColor Yellow
+    Write-Host 'Baseline/provenance differences were recorded but are non-fatal in the normal Player B runtime audit. Use -Strict for an archival exact-baseline audit.' -ForegroundColor Yellow
 }
 exit 0
