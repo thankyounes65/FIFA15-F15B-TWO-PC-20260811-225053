@@ -28,6 +28,12 @@ function Assert-LocalState {
         }
     }
 
+    $gitDir=Join-Path $Root '.git'
+    if(Test-Path -LiteralPath $gitDir){
+        $branch=(& git -C $Root branch --show-current 2>$null | Select-Object -First 1).Trim()
+        if($branch -ne $ExpectedBranch){throw "Wrong Player B branch: $branch; expected $ExpectedBranch"}
+    }
+
     if ([string]$Config.candidate_id -ne $Candidate) { throw "APPLIANCE-CONFIG candidate mismatch: $($Config.candidate_id)" }
     if ([string]$Config.package_attestation -ne $Package) { throw "APPLIANCE-CONFIG package mismatch: $($Config.package_attestation)" }
     if ([string]$Config.expected_host_branch -ne $ExpectedBranch) { throw "APPLIANCE-CONFIG host branch mismatch: $($Config.expected_host_branch)" }
