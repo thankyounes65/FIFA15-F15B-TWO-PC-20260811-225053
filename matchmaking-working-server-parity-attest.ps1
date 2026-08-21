@@ -18,7 +18,7 @@ $ExpectedBaseline='77e527180a6cf3810e5eafc4be1cb40230a0fd99'
 function Assert-LocalState {
     if (-not $HostIp) { throw 'APPLIANCE-CONFIG.json has no host_ip' }
     foreach ($path in @(
-        'RUNTIME-TEST.md','RUN-FIFA15-F15B.bat','RUN-FIFA15-F15B-PARITY.ps1',
+        'RUNTIME-TEST.md','RUN-FIFA15-F15B.bat','RUN-FIFA15-F15B-QOS-STATE-PARITY.ps1',
         'COLLECT-PLAYER-B-EVIDENCE.ps1','diagnostic-run.ps1','guest-network-observer.ps1',
         'VERIFY-PLAYER-B-GAME-FILES.ps1','capture-blaze-traffic.ps1',
         'APPLIANCE-CONFIG.json','PACKAGE-MANIFEST.json'
@@ -56,7 +56,7 @@ function Assert-LocalState {
     }
     $launcherText=Get-Content -LiteralPath (Join-Path $Root 'RUN-FIFA15-F15B.bat') -Raw
     if (-not $launcherText.Contains($Candidate)) { throw 'RUN-FIFA15-F15B.bat banner does not name current candidate.' }
-    if (-not $launcherText.Contains('RUN-FIFA15-F15B-PARITY.ps1')) { throw 'RUN-FIFA15-F15B.bat is not wired to parity runner.' }
+    if (-not $launcherText.Contains('RUN-FIFA15-F15B-QOS-STATE-PARITY.ps1')) { throw 'RUN-FIFA15-F15B.bat is not wired to QoS state-parity runner.' }
 }
 
 Assert-LocalState
