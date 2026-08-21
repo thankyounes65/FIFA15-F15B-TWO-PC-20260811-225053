@@ -35,6 +35,15 @@ function Hash-OrUnavailable([string]$Path){
     try{if(Test-Path -LiteralPath $Path -PathType Leaf){return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()}}catch{}
     'unavailable'
 }
+function Git-Head-OrPortable {
+    try{
+        if(Test-Path -LiteralPath (Join-Path $Root '.git')){
+            $head=(& git -C $Root rev-parse HEAD 2>$null | Select-Object -First 1).Trim().ToLowerInvariant()
+            if($head){return $head}
+        }
+    }catch{}
+    'portable-extracted-folder-no-git'
+}
 function Assert-Files {
     foreach($name in @(
         'matchmaking-working-server-parity-attest.ps1','diagnostic-run.ps1',
@@ -59,11 +68,13 @@ if($SelfTest){
     exit 0
 }
 
+$bHead=Git-Head-OrPortable
 New-Item -ItemType Directory -Force -Path $attempt | Out-Null
 @(
     'FIFA15 QoS state parity v1 - Player B',
     "started_utc=$((Get-Date).ToUniversalTime().ToString('o'))",
     "branch=$ExpectedBranch",
+    "b_head=$bHead",
     "candidate_id=$Candidate",
     "package_attestation=$Package",
     'native_instrumentation=none',
