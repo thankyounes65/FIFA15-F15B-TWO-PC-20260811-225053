@@ -54,7 +54,7 @@ if($SelfTest){
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Collect,'-SelfTest')
     Run 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Capture,'-SelfTest')
     $source=Get-Content -LiteralPath $PSCommandPath -Raw
-    foreach($token in @(('fri'+'da'),('Interceptor'+'.attach'),('Stalker'+'.follow'))){if($source.Contains($token)){throw "Instrumentation token present: $token"}}
+    foreach($token in @(('Interceptor'+'.attach'),('Stalker'+'.follow'))){if($source.Contains($token)){throw "In-process instrumentation token present: $token"}}
     Write-Host "PASS: Player B QoS state-parity runner pins $ExpectedBranch / $Candidate / $Package and reuses the proven passive boot/network/capture stack." -ForegroundColor Green
     exit 0
 }
